@@ -37,7 +37,7 @@ def test_numbers_come_from_the_source_not_the_tm(tm):
 
 def test_decimal_comma_becomes_point_but_codes_keep_it(tm):
     assert tm.translate("Бетон класса B7,5")[0] == "混凝土 B7.5"
-    assert fmt_num("1,2", "-О") == "1,2"          # code such as 1,2-О-Ч
+    assert fmt_num("2,5", "-К") == "2,5"          # code such as 2,5-К-1
     assert fmt_num("0,95", "") == "0.95"
 
 

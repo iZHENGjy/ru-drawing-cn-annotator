@@ -25,7 +25,7 @@ pdfmetrics.registerFont(TTFont("F", font))
 
 W, H = landscape(A3)                       # 1190.55 x 841.89 pt
 OUT = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).with_name("demo_drawing.pdf")
-c = canvas.Canvas(str(OUT), pagesize=(W, H))
+c = canvas.Canvas(str(OUT), pagesize=(W, H), invariant=1)    # reproducible bytes
 c.setTitle("Demo drawing (synthetic)")
 c.setAuthor("ru-drawing-cn-annotator demo")
 
@@ -163,7 +163,7 @@ rect(sx - 45, base - 140, sx + 45, base, 1.2)             # pedestal
 for dx in (-25, 25):
     line(sx + dx, base - 160, sx + dx, base - 10, 0.8)    # bolts
 line(sx - 170, base - 110, sx - 45, base - 110, 0.4)      # ground line
-line(sx + 45, base - 110, sx + 170, base - 110, 0.4)
+line(sx + 45, base - 110, sx + 150, base - 110, 0.4)
 text(sx - 165, base - 116, "±0,000", 8)
 text(sx + 120, base + 54, "-1,500", 8)
 line(sx + 100, base + 60, sx + 170, base + 60, 0.4)

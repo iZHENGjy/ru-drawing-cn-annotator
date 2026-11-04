@@ -52,6 +52,41 @@ notes = (0.05, 0.05, 0.52, 0.60)           # bilingual list of drawings + genera
 png(src, 1, IMG / "sheet2_detail_before.png", notes, dpi=120)
 png(s2, 0, IMG / "sheet2_detail_after.png", notes, dpi=120)
 
+
+
+def hero(out, clip_pt=(862, 45, 1170, 233), dpi=216):
+    """README banner: the same clip of sheet 1 before and after, side by side."""
+    from PIL import Image, ImageDraw, ImageFont
+    sys.path.insert(0, str(S))
+    from engine import place
+
+    def shot(pdf):
+        pix = pymupdf.open(pdf)[0].get_pixmap(clip=pymupdf.Rect(*clip_pt), dpi=dpi)
+        return Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
+    a, b = shot(src), shot(s1)
+    pad, gap, head = 36, 110, 84
+    W = pad * 2 + a.width + gap + b.width
+    H = pad + head + a.height + pad
+    img = Image.new("RGB", (W, H), "white")
+    d = ImageDraw.Draw(img)
+    try:
+        f = ImageFont.truetype(place.FONT_FILE, 40) if place.FONT_FILE else ImageFont.load_default()
+    except OSError:
+        f = ImageFont.load_default()
+    xa, xb, y = pad, pad + a.width + gap, pad + head
+    for x, im, label, col in ((xa, a, "Original  原图", (60, 60, 60)), (xb, b, "Annotated  中文标注版", (0, 46, 191))):
+        img.paste(im, (x, y))
+        d.rectangle([x - 1, y - 1, x + im.width, y + im.height], outline=(200, 200, 200), width=2)
+        d.text((x, pad + 10), label, font=f, fill=col)
+    cy, x0 = y + a.height // 2, xa + a.width + 24
+    d.line([(x0, cy), (x0 + gap - 48, cy)], fill=(0, 46, 191), width=6)
+    d.polygon([(x0 + gap - 48, cy - 16), (x0 + gap - 48, cy + 16), (x0 + gap - 28, cy)], fill=(0, 46, 191))
+    img.save(out, optimize=True)
+    print("  ", out.relative_to(ROOT))
+
+
+hero(IMG / "hero.png")
+
 run(DEMO / "make_demo_dxf.py")
 run(S / "cad" / "10_build.py", "--dxf", "demo_plan.dxf")
 run(S / "cad" / "20_preview.py", OUT / "demo_plan_CN.dxf", IMG / "dxf_after.png", -500, -1500, 9500, 6500, 110)

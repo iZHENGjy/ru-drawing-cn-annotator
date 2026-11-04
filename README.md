@@ -1,43 +1,74 @@
-# ru-drawing-cn-annotator
+<h1 align="center">ru-drawing-cn-annotator</h1>
 
-[![tests](https://github.com/iZHENGjy/ru-drawing-cn-annotator/actions/workflows/tests.yml/badge.svg)](https://github.com/iZHENGjy/ru-drawing-cn-annotator/actions/workflows/tests.yml)
+<p align="center">
+  <b>Russian engineering drawings → bilingual Chinese editions, without touching the original.</b><br>
+  俄文工程图纸 → 中文标注版：蓝色中文以矢量叠加在俄文旁，原图一笔不改
+</p>
 
-**English** · [中文](#中文说明)
+<p align="center">
+  <a href="https://github.com/iZHENGjy/ru-drawing-cn-annotator/actions/workflows/tests.yml"><img src="https://github.com/iZHENGjy/ru-drawing-cn-annotator/actions/workflows/tests.yml/badge.svg" alt="tests"></a>
+  <img src="https://img.shields.io/badge/python-3.11%2B-3776AB" alt="Python 3.11+">
+  <img src="https://img.shields.io/badge/input-PDF%20%C2%B7%20DWG%2FDXF-0B5CAD" alt="PDF · DWG/DXF">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT"></a>
+</p>
 
-Put Chinese translations on Russian engineering drawings **without touching the original**.
-The Chinese is drawn as blue vector text next to each Russian label, note and table cell
-(PDF), or on its own `CN_TRANSLATION` layer (DWG/DXF). The result is a printable bilingual
-drawing in which every original line, dimension and Russian word is exactly where it was.
+<p align="center"><img src="docs/img/hero.png" alt="Russian general notes before and after: Chinese translation added in blue under each clause" width="100%"></p>
 
-Built for a real Russian → Chinese job on a 100+-page reinforced-concrete (КЖ) drawing album
-and a site-plan DWG. This repository holds only the generic tooling; the demo drawings
-below are synthetic.
+<p align="center">
+  <a href="#demo">Demo</a> · <a href="#how-it-works">How it works</a> · <a href="#quickstart">Quickstart</a> · <a href="#limitations">Limitations</a> · <a href="#中文说明">中文说明</a>
+</p>
+
+Drawings made to Russian standards (ГОСТ / СПДС) often have to be handed to Chinese
+engineers and contractors. Re-drawing them in Chinese is slow, and machine translation
+silently corrupts the numbers, grades and standard references that matter most. This tool
+keeps the drawing as it is and **adds** the Chinese: blue vector text next to every Russian
+label, note and table cell (PDF), or a separate `CN_TRANSLATION` layer (DWG/DXF). The result
+prints as one bilingual sheet.
+
+## Highlights
+
+- **Original untouched** – Chinese is an added layer; every line, dimension and Russian word
+  stays where it was, and that is checked on every page.
+- **Numbers cannot be mistranslated** – the translation memory stores numbers as `⟨n⟩`
+  placeholders, so values, ГОСТ/СП numbers, concrete and rebar grades always come from the source.
+- **Layout-aware placement** – rebuilds paragraphs and table cells from the drawing's own rules,
+  finds free space, wraps Chinese by word (jieba), shrinks or uses numbered callouts when space is tight.
+- **Bilingual RU/EN sheets** – optionally removes only the English text layer, glyph by glyph,
+  and sets the Chinese in its place.
+- **DWG/DXF as well** – text inside blocks and rotated text included; an overlay DXF to insert at 0,0.
+- **QA you can hand to a reviewer** – per-page checks plus an issue list.
+
+Developed on a real commercial translation job. No client material is included: every
+drawing in this repository is synthetic.
 
 ## Demo
 
-**Sheet 1 – Russian-only foundation drawing** (`--english keep`, the default: nothing is removed)
+### 1 · Russian-only sheet: Chinese added, nothing removed
 
-| before | after |
-|---|---|
+| Original | Annotated (`--english keep`, default) |
+|:-:|:-:|
+| ![notes and table, before](docs/img/sheet1_detail_before.png) | ![notes and table, after](docs/img/sheet1_detail_after.png) |
+
+Codes such as Фм1, А500С, Ø12 and L=2350 are left alone; ГОСТ numbers and values are carried over.
+
+### 2 · Bilingual RU/EN sheet: the English layer is replaced
+
+| Original | Annotated (`--english replace`) |
+|:-:|:-:|
+| ![bilingual sheet, before](docs/img/sheet2_detail_before.png) | ![bilingual sheet, after](docs/img/sheet2_detail_after.png) |
+
+### 3 · DWG/DXF: separate `CN_TRANSLATION` layer
+
+<p align="center"><img src="docs/img/dxf_after.png" alt="DXF plan with Chinese on its own layer" width="75%"></p>
+
+<details>
+<summary>Full sheet 1, before and after</summary>
+
+| Original | Annotated |
+|:-:|:-:|
 | ![](docs/img/sheet1_before.png) | ![](docs/img/sheet1_after.png) |
 
-Close-up of the notes and the specification table — numbers, ГОСТ references, rebar grades
-and codes (Фм1, А500С, Ø12) are carried over from the Russian, never re-typed:
-
-![notes and table, before](docs/img/sheet1_detail_before.png)
-![notes and table, after](docs/img/sheet1_detail_after.png)
-
-**Sheet 2 – bilingual RU/EN sheet** (`--english replace`: the English text layer is removed
-glyph by glyph and the Chinese takes its slot; Russian and line art stay)
-
-| before | after |
-|---|---|
-| ![](docs/img/sheet2_detail_before.png) | ![](docs/img/sheet2_detail_after.png) |
-
-**DWG/DXF** – Chinese added on layer `CN_TRANSLATION` (blue), including text inside blocks
-and rotated text; an overlay-only DXF is written as well:
-
-![DXF overlay](docs/img/dxf_after.png)
+</details>
 
 Reproduce everything with `python demo/run_demo.py`.
 
@@ -177,7 +208,7 @@ included and are only invoked as external programs.
 或放在独立图层 `CN_TRANSLATION` 上（DWG/DXF）。原图的线条、尺寸和俄文**一处不改**，
 输出可直接打印的双语图纸。
 
-这套工具来自一次真实的俄译中项目（100 多页的钢筋混凝土 КЖ 图册和一张总平面 DWG）。
+这套工具来自一次真实的商业图纸翻译工作。
 本仓库只包含通用代码，不含任何客户资料；上面的演示图纸是程序生成的虚构图纸。
 
 ### 能做什么

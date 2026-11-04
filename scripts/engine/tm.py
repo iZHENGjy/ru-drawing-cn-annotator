@@ -4,7 +4,7 @@ Key   = normalised Russian text, every number replaced by ⟨1⟩, ⟨2⟩ ...
 Value = Chinese text that must contain exactly the same placeholders.
 At render time the original numbers are substituted back, so numbers can never
 be altered by translation.  Decimal commas become points (except inside codes
-such as 1,2-О-Ч).
+such as 2,5-К-1).
 """
 from __future__ import annotations
 import json, re
@@ -52,7 +52,7 @@ def make_key(core: str):
 
 
 def fmt_num(n: str, after: str) -> str:
-    """decimal comma -> point, except in codes like 1,2-О-Ч (comma number followed by -letter)"""
+    """decimal comma -> point, except in codes like 2,5-К-1 (comma number followed by -letter)"""
     if re.fullmatch(r"\d+,\d+", n) and not re.match(r"^-[A-Za-zА-Яа-яЁё]", after):
         return n.replace(",", ".")
     return n

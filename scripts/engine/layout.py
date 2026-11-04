@@ -173,9 +173,9 @@ def word_lang(t: str) -> str:
     has_c, has_l = bool(CYR.search(core)), bool(LAT2.search(core))
     has_d = any(ch.isdigit() for ch in core)
     lower_c = bool(re.search(r"[а-яё]", core))
-    if has_d and not re.search(r"[а-яёa-z]{2,}", core):      # 16-А500C, KП2, 1,2-О-Ч, Фм1, L=2550
+    if has_d and not re.search(r"[а-яёa-z]{2,}", core):      # 12-А500С, К1, 2,5-К-1, Фм1, L=2400
         return "neu"
-    if re.match(r"^[А-ЯЁ][а-я]?\d", core):                    # Фм1, Фм6.1
+    if re.match(r"^[А-ЯЁ][а-я]?\d", core):                    # Фм1, П2.1
         return "neu"
     if has_c and has_l:
         return "mix"
@@ -332,7 +332,7 @@ def group_blocks(lines: list[Line], si: "SegIndex") -> list[list[Line]]:
                 pure_new = not any(w.lang != "neu" for w in l.words)
                 pure_last = not any(w.lang != "neu" for w in last.words)
                 # pure number / name lines stay on their own - except the tail of a long
-                # paragraph line ("... опорной плиты" + "45°.")
+                # paragraph line ("... под углом" + "45°.")
                 tail_of_par = (pure_new and not pure_last and Lr.width > 15 * l.size
                                and (abs(lr.x0 - first.x0) < 2.2 * l.size or 0 < Lr.x0 - lr.x0 < 6 * l.size))
                 if (pure_new or pure_last) and not tail_of_par:

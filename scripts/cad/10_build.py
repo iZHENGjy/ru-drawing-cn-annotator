@@ -126,7 +126,7 @@ def group(items):
                         continue          # numbers / codes are separate cells, not part of a label
                     mu0, mu1, mv, mh = lbox(m)
                     pitch = cv - mv
-                    lim = 2.6 * ch if m[0].text.startswith("(") else 2.0 * ch    # "(Raised floor)" etc.
+                    lim = 2.6 * ch if m[0].text.startswith("(") else 2.0 * ch    # "(existing)" etc.
                     if abs(mh - ch) < 0.1 * ch and 0.5 * ch < pitch <= lim:
                         ov = min(cu1, mu1) - max(cu0, mu0)
                         cx = abs((cu0 + cu1) / 2 - (mu0 + mu1) / 2)
