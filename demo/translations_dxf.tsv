@@ -1,0 +1,7 @@
+# batch for the DXF demo (indices from work/review/todo_all.txt after cad/10_build.py --dry)
+0	Электрощитовая	配电室
+1	Машинный зал	机器间
+2	Тамбур	门斗
+3	Стены из кирпича	砖墙厚 ⟨1⟩ mm
+4	План на отм.	⟨1⟩ 标高平面图
+5	Кабельный канал	电缆沟

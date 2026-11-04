@@ -1,0 +1,8 @@
+pymupdf>=1.24      # PDF analysis, glyph-level redaction, vector text (AGPL-3.0, see README)
+jieba>=0.42        # Chinese word segmentation for line breaking
+ezdxf>=1.3         # DXF read/write
+pdfplumber>=0.11   # survey: word extraction (01_extract.py)
+matplotlib>=3.8    # DXF previews
+numpy>=1.26
+reportlab>=4.0     # demo drawing generator only
+pytest>=8

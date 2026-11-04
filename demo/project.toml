@@ -1,0 +1,13 @@
+# Demo project: a synthetic 2-sheet drawing set (see make_demo_pdf.py).
+[project]
+name = "Demo foundation drawing"
+pdf = "demo_drawing.pdf"
+tm = "tm.json"                                  # project translation memory (40_merge_tm.py writes here)
+glossaries = ["../glossary/gost_general.json"]  # read-only, underneath the project TM
+review_dir = "work/review"
+output_dir = "work/output"
+extract_dir = "work/extract"
+
+[keep]
+# signatures in the title block: never translated, never "Russian" for the pairing logic
+names = ["Иванов", "Петров", "Сидоров", "Кузнецов"]

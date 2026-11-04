@@ -1,0 +1,32 @@
+# Copy to <your project folder>/project.toml and run the scripts from that folder
+# (or pass --config path/to/project.toml).  Relative paths are relative to this file.
+
+[project]
+name = "My drawing set"                  # used in the issue list title
+pdf = "input/drawings.pdf"               # Russian (or RU/EN bilingual) drawing PDF with a text layer
+dxf = "input/plan.dxf"                   # optional: DWG converted to DXF (see README)
+tm = "dict/tm.json"                      # project translation memory (written by 40_merge_tm.py)
+glossaries = ["../ru-drawing-cn-annotator/glossary/gost_general.json"]   # read-only base layers
+review_dir = "review"                    # reports, tm_todo.json
+output_dir = "output"                    # translated PDF / DXF
+extract_dir = "extract"                  # survey output of 01_extract.py
+# font = "C:/Windows/Fonts/simhei.ttf"   # Chinese font; default: auto-detect ($RUDRAW_FONT wins)
+# notes_pages = "3,4"                    # pages with long numbered general notes
+
+[title_block]
+# labels that locate the ГОСТ 21.101 title block (context "tb" for the translation memory)
+# anchors = ["Изм.", "Разраб.", "Стадия", "Листов", "Формат", "Н.контр.", "Кол.уч.", "ГИП"]
+left_stamp_width = 75                    # pt; the left margin stamp strip also counts as title block
+
+[keep]
+# kept verbatim and treated as neutral by the RU/EN pairing logic
+names = []                               # signatures in the title block, e.g. ["Иванов"]
+acronyms = []                            # organisation / plant codes
+
+[segmentation]
+words = []                               # Chinese terms that must never be broken across lines
+
+# [[volume.sections]]                    # optional, for 05_volume.py
+# name = "General notes"
+# first = 1
+# last = 4
