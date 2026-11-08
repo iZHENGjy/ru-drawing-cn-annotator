@@ -4,5 +4,8 @@ ezdxf>=1.3         # DXF read/write
 pdfplumber>=0.11   # survey: word extraction (01_extract.py)
 matplotlib>=3.8    # DXF previews
 numpy>=1.26
-reportlab>=4.0     # demo drawing generator only
+reportlab>=4.0     # demo drawing generator; scanned route drawing
+pypdf>=4.0         # scanned route: page merge
+pillow>=10         # scanned route: review crops
+# rapidocr + onnxruntime: optional second OCR detector for scans (pip install rapidocr onnxruntime)
 pytest>=8

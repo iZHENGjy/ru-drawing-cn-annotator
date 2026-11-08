@@ -8,7 +8,7 @@
 <p align="center">
   <a href="https://github.com/iZHENGjy/ru-drawing-cn-annotator/actions/workflows/tests.yml"><img src="https://github.com/iZHENGjy/ru-drawing-cn-annotator/actions/workflows/tests.yml/badge.svg" alt="tests"></a>
   <img src="https://img.shields.io/badge/python-3.11%2B-3776AB" alt="Python 3.11+">
-  <img src="https://img.shields.io/badge/input-PDF%20%C2%B7%20DWG%2FDXF-0B5CAD" alt="PDF · DWG/DXF">
+  <img src="https://img.shields.io/badge/input-PDF%20%C2%B7%20scanned%20PDF%20%C2%B7%20DWG%2FDXF-0B5CAD" alt="PDF · scanned PDF · DWG/DXF">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT"></a>
 </p>
 
@@ -36,6 +36,9 @@ prints as one bilingual sheet.
 - **Bilingual RU/EN sheets** – optionally removes only the English text layer, glyph by glyph,
   and sets the Chinese in its place.
 - **DWG/DXF as well** – text inside blocks and rotated text included; an overlay DXF to insert at 0,0.
+- **Scanned PDFs too** – a separate OCR route (Tesseract + RapidOCR) with a coverage audit that
+  proves every detected Russian text region got its Chinese, and a page-by-page visual review
+  loop; see [docs/scanned.md](docs/scanned.md).
 - **QA you can hand to a reviewer** – per-page checks plus an issue list.
 
 Developed on a real commercial translation job. No client material is included: every
@@ -162,8 +165,10 @@ entry whose placeholders differ from the key or that hard-codes digits.
 
 ## Limitations
 
-- **Needs a text layer.** Scans and AutoCAD exports where text became SHX vector strokes have
-  no extractable text; run OCR first (not included). `01_extract.py` tells you.
+- **The main route needs a text layer.** Scans and AutoCAD exports where text became SHX vector
+  strokes have no extractable text (`01_extract.py` tells you). Use the scanned route
+  (`scripts/scan/`, [docs/scanned.md](docs/scanned.md)) for those: it is OCR-based, so it relies
+  on its coverage audit and a human / LLM visual review rather than on exact glyphs.
 - **Not machine translation.** Quality is exactly the quality of your translation memory. The
   automatic QA proves completeness, number/standard consistency and clean layout — not that a
   translation is right. Have a domain reviewer check the terms.
@@ -188,9 +193,14 @@ scripts/
   42_debug_pairs.py  RU/EN pairing diagnostics                 43_issues.py   reviewer's issue list
   cad/               collect.py · 01_census · 02_blocks · 03_dump_wcs · 04_overview
                      10_build (DXF layer + overlay) · 20_preview · 30_to_dwg.ps1 (ODA)
+  scan/              scanned PDFs: ctx · engine · 10_ocr · 11_rapid · 12_preview · 20_build
+                     30_audit · 31_apply_audit · 40_tiles · 41_apply_visual · 50_check
+docs/scanned.md      scanned route: pipeline, delivery gates, lessons from a real set
+docs/scanned/        prompts for translators and reviewers (translate, map, audit, visual)
 glossary/            gost_general.json – generic title-block / СПДС glossary
 demo/                synthetic drawing + DXF generators, demo TM, run_demo.py
-tests/               pytest: TM, layout, wrapping, obstacle test, end-to-end no-overlap
+tests/               pytest: TM, layout, wrapping, obstacle test, end-to-end no-overlap,
+                     scanned route end-to-end (synthetic scan, audit, mark gate)
 ```
 
 ## License
@@ -248,7 +258,8 @@ DWG 需先转成 DXF：推荐 ODA File Converter（免费，非开源），或�
 
 ### 局限
 
-- PDF 必须有文字层；扫描件或 SHX 线条文字需要先 OCR（不含在本仓库）。
+- 主流程要求 PDF 有文字层。扫描件请走 `scripts/scan/` 扫描件流程（Tesseract + RapidOCR 双检测、
+  覆盖率核对必须为 0、构件代号校验、逐页看图复核），说明见 [docs/scanned.md](docs/scanned.md)。
 - 不是机器翻译：译文质量取决于翻译记忆库。自动检查只能证明"不漏、不错数字、不压字"，不能证明译得对，术语需要专业人员审定。
 - 版面规则针对 ГОСТ/СПДС 图纸（水平和 90° 文字、3 号图签）；图签格子很窄时中文会很小或改用圈号。
 - 上下文只区分"图签 / 正文"两种，其他多义情况需要在项目词库里单独覆盖。
