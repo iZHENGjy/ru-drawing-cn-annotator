@@ -222,9 +222,19 @@ def run_audit_review(sc: StageCtx):
             if int(old.stem[1:]) not in pgs:
                 stale.mkdir(exist_ok=True)
                 shutil.move(str(old), str(stale / old.name))
+        human = []
         for pg, r in zip(pgs, results):
             if r.ok and r.output is not None:
-                (adir / f"p{pg:02d}.json").write_text(json.dumps(r.output, ensure_ascii=False, indent=1), encoding="utf-8")
+                out = json.loads(json.dumps(r.output))
+                for it in out.get("items") or []:     # "[?]" = reviewer could not read it: a person decides,
+                    if it.get("act") == "tr" and "[?]" in (it.get("zh") or ""):   # nothing is drawn
+                        human.append("\t".join([f"p{pg:02d}", it.get("ref", ""), it.get("ru", ""), it.get("why", "")]))
+                        it.update(act="skip", zh="", why="待人工核对: " + (it.get("why") or ""))
+                (adir / f"p{pg:02d}.json").write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
+        if human:
+            with open(_jf(job, "human_todo.tsv"), "a", encoding="utf-8") as fh:
+                fh.write("".join(h + "\n" for h in human))
+            tot["human_todo"] = tot.get("human_todo", 0) + len(human)
         s = summarize_results(results)
         for k in ("calls", "cached", "cost_usd"):
             tot[k] = round(tot[k] + s[k], 4)

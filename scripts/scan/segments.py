@@ -57,6 +57,23 @@ def _fix_word(w: str) -> str:
     return w
 
 
+_MARKLAT = re.compile(r"(?<![A-Za-zА-Яа-яЁё])([A-ZА-ЯЁ])([mм]|[HН])(?=\s?\d)")
+
+
+def norm_marks(text: str) -> str:
+    """Member marks written with Latin look-alikes -> Cyrillic (MH4 -> МН4, Bm2.5 -> Вм2.5), so
+    mark sets from notes, OCR and translations compare equal."""
+    def conv(m):
+        a, b = m.group(1), m.group(2)
+        if b in "HН" and a not in "MМ":
+            return m.group(0)
+        a2 = a.translate(LAT2CYR) if a.isascii() else a
+        if a.isascii() and a2 == a:            # not a look-alike letter (L, S, ...)
+            return m.group(0)
+        return a2 + ("Н" if b in "HН" else "м")
+    return _MARKLAT.sub(conv, text or "")
+
+
 def lookalike_cyr(text: str, per_word: bool = False) -> str | None:
     """A Latin-only reading whose letters are all Cyrillic look-alikes (Macca -> Масса), else None.
     ``per_word``: convert only such words of ≥3 letters (Macca/Weight -> Масса/Weight)."""

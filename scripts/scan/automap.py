@@ -139,7 +139,7 @@ def known_marks(ctx, notes_results: dict) -> set:
     for src in getattr(ctx.cfg, "mark_sources", None) or []:
         for f in sorted(C_p(ctx.cfg.root, src).glob("p??.json")):
             txt += f.read_text(encoding="utf-8")
-    return {a + b for a, b in MARK_RE.findall(txt)}
+    return {a + b for a, b in MARK_RE.findall(S.norm_marks(txt))}
 
 
 def C_p(root, v):

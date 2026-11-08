@@ -19,7 +19,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import pymupdf  # noqa: E402
-from scan import ctx as C  # noqa: E402
+from scan import ctx as C, segments as S  # noqa: E402
 
 MARK = re.compile(r"([А-ЯЁ]м|МН)\s?(\d+(?:\.\d+)?(?:-\d+)?)")
 
@@ -59,13 +59,17 @@ def main():
         for pg in range(1, n + 1):
             j = C.load_notes(ctx, pg)
             if j:
-                for m in MARK.finditer(json.dumps(j, ensure_ascii=False)):
+                for m in MARK.finditer(S.norm_marks(json.dumps(j, ensure_ascii=False))):
                     valid.add(m.group(1) + m.group(2))
         for src in cfg.mark_sources or []:          # related volumes: marks defined there (МН items ...)
             for f in sorted(C._p(cfg.root, src).glob("p*.json")):
                 if f.name.count(".") == 1:
-                    for m in MARK.finditer(f.read_text(encoding="utf-8")):
+                    for m in MARK.finditer(S.norm_marks(f.read_text(encoding="utf-8"))):
                         valid.add(m.group(1) + m.group(2))
+    accepted = {m.replace(" ", "") for m in (cfg.accept_marks or [])}
+    if accepted:
+        print("accepted exceptions (checked by a person, list them in the delivery note):", ", ".join(sorted(accepted)))
+    valid |= accepted
     problems = []
     for pg in range(1, n + 1):
         if not ctx.lines(pg).exists():
