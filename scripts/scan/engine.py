@@ -72,6 +72,11 @@ def wrap(text, fs, maxw):
 APPX = re.compile(r"[,，]?\s*[（(]?\s*(续\s*[,，]\s*)?中文译文见[^)）]*[)）]?")
 
 COVER = {}
+# Opt-in output switches (set by 20_build.py from --compact / [output]); defaults = historical output.
+#   compact: do not draw the per-word 根/间距/件 count labels (nor their legend entry)
+OPTS = {"compact": False}
+FRAME_ANYWHERE = {"状态": "Статус", "版次": "Рев.", "状态/版次": "Статус/Рев.", "发布目的": "Назначение выпуска"}
+LOW_LEGEND = "虚线下划线=机器译文,置信度低,待核对"
 FS_K = 1.0   # 中文字号 = 俄文 OCR 行高 × FS_K(≈原文字号 0.92 倍;原 0.72 只有 0.66 倍)
 
 def load_rapid(doc, pg, PW, PH):
@@ -261,6 +266,30 @@ class Placer:
                             seen.append(o)
         return seen
 
+def load_meta(pg):
+    """map/pNN.meta.json sidecar -> (set of low-confidence line ids, set of low-confidence extra indices).
+    Absent / unreadable sidecar -> empty sets (output unchanged)."""
+    import json
+    try:
+        fn = CTX.f("map", pg, ".meta.json")
+        m = json.loads(fn.read_text(encoding="utf-8")) if fn.exists() else {}
+    except Exception:
+        return set(), set()
+    lines = m.get("lines") or {}
+    extra = m.get("extra") or []
+    low_l = {int(k) for k, v in lines.items() if isinstance(v, dict) and v.get("conf") == "low" and str(k).lstrip("-").isdigit()}
+    low_e = {i for i, v in enumerate(extra) if isinstance(v, dict) and v.get("conf") == "low"}
+    return low_l, low_e
+
+
+def _dots(c, x, y, w):
+    """Dotted underline (low-confidence marker): same blue, hairline, prints in B/W, adds no text."""
+    c.saveState()
+    c.setLineWidth(0.35); c.setDash(0.5, 1.1)
+    c.line(x, y, x + w, y)
+    c.restoreState()
+
+
 def annotate(doc, pg, mapping, trans, report):
     reader = PdfReader(str(CTX.cfg.pdf))
     # pypdf >= 7 only edits content streams of pages that belong to a writer
@@ -286,6 +315,8 @@ def annotate(doc, pg, mapping, trans, report):
     hmed = hs[len(hs) // 2] if hs else (9 if big else 6)
 
     lm = {int(k): v for k, v in (mapping.get("lines") or {}).items()}
+    low_lines, low_extra = load_meta(pg)
+    compact = bool(OPTS.get("compact"))
     cov = dict(placed=[], legend=[], dup=[], notes=[], stamp=None, blank=[], lost=[], PW=PW, PH=PH)
     COVER[(doc, pg)] = cov
     for d in lines:
@@ -308,13 +339,17 @@ def annotate(doc, pg, mapping, trans, report):
             zh = APPX.sub("", zh).strip(" ,，(（") or "说明"
             if (re.match(r"^\W*\d", d["text"]) or len(d["text"]) > 30) and len(zh) <= 8:
                 continue   # 条文行上的「说明」定位标记不画(整块译文在旁边),否则像是该条的译文
-        items.append(dict(zh=zh, box=lineboxes[d["id"]], src=lineboxes[d["id"]], id=d["id"], ru=d["text"]))
-    for e in mapping.get("extra") or []:
+        items.append(dict(zh=zh, box=lineboxes[d["id"]], src=lineboxes[d["id"]], id=d["id"], ru=d["text"],
+                          low=d["id"] in low_lines))
+    for ei, e in enumerate(mapping.get("extra") or []):
         zh = clean(e.get("zh"))
         if not zh:
             continue
         if re.fullmatch(r"/?\s*(\d[\d+()]*\s*)?(根|件|个|间距\s*\d*)", zh) and not str(e.get("src", "")).startswith("manual"):   # 目测补框的数量标注:改由单词框机制
             continue
+        if compact and re.fullmatch(r"/?\s*(\d[\d+()]*\s*)?(根|件|个|间距\s*\d*)", zh):   # 精简版:不画数量/间距标注
+            continue
+        elow = ei in low_extra
         ishead = "中文译文见" in zh
         if ishead:
             zh = APPX.sub("", zh).strip(" ,，") or "说明"
@@ -324,14 +359,14 @@ def annotate(doc, pg, mapping, trans, report):
                 heads.append((byid[int(e["anchor"])], zh))
                 if re.match(r"^\W*\d", byid[int(e["anchor"])]["text"]) or len(byid[int(e["anchor"])]["text"]) > 30:
                     continue   # 锚在条文行上的说明标记只用于定位,不画(否则像是该条的译文)
-            items.append(dict(zh=zh, box=bb, src=bb, id=None))
+            items.append(dict(zh=zh, box=bb, src=bb, id=None, low=elow))
         elif e.get("box"):
             b = e["box"]
             bb = (b[0] * PW, b[1] * PH, b[2] * PW, b[3] * PH)
             pl.add(bb, pl.obs)
             if ishead:
                 heads.append((dict(id=None, text="", x0=bb[0], y0=bb[1], x1=bb[2], y1=bb[3]), zh))
-            items.append(dict(zh=zh, box=bb, src=bb, id=None, ru=e.get("ru")))
+            items.append(dict(zh=zh, box=bb, src=bb, id=None, ru=e.get("ru"), low=elow))
 
     # Raster approval stamp ([scan] stamp_image_size + stamp_zh): its lines are merged into one
     # Chinese line placed just above the stamp.
@@ -384,7 +419,8 @@ def annotate(doc, pg, mapping, trans, report):
     for bb, z in toks:
         if any(_ov(bb, it["box"]) and re.search("根|件|间距", it["zh"]) for it in items):
             continue
-        items.append(dict(zh=z, box=bb, src=bb, id=None, tiny=True))
+        if not compact:
+            items.append(dict(zh=z, box=bb, src=bb, id=None, tiny=True))
         pl.add(bb, pl.obs)
 
     buf = io.BytesIO()
@@ -682,6 +718,11 @@ def annotate(doc, pg, mapping, trans, report):
                 key = "/".join(CANON[q] for q in parts)
         if z.startswith("图幅") and zone:
             key = "Формат"
+        # sheet-frame-only fields (revision box, sheet count) belong in the legend wherever they sit
+        if not zone and z in FRAME_ANYWHERE:
+            zone, key = True, FRAME_ANYWHERE[z]
+        elif not zone and re.fullmatch(r"总页数\d*", z):
+            zone, key = True, "Листов"
         if zone and (z.startswith("本文件为") or z.startswith("版权声明")):
             key = "左侧竖排声明"
         if zone and key and not it.get("tiny") and not it.get("stamp"):
@@ -708,13 +749,15 @@ def annotate(doc, pg, mapping, trans, report):
             continue
         cov["placed"].append((it["box"], it["zh"]))
         pl.add(c[3], pl.plc)
-        draws.append(("lbl", c, leader, it["box"]))
+        draws.append(("lbl", c, leader, it["box"], bool(it.get("low"))))
 
     # ---- 栏目对照表(放不下的短栏目) ----
-    if toks:   # 有数量/间距小标注的页:对照行首写明缩写含义
+    if toks and not compact:   # 有数量/间距小标注的页:对照行首写明缩写含义
         legend.insert(0, ("шт./pcs.", CTX.cfg.count_word + "数"))
         if any(z == "间距" for _, z in toks):
             legend.insert(1, ("ш./sp.", "间距"))
+    if any(d[0] == "lbl" and len(d) > 4 and d[4] for d in draws):   # 有低置信度译文被画出:对照行写明标记含义
+        legend.append(("", LOW_LEGEND))
     if legend:
         seen, ent = set(), []
         for ru, zh in legend:
@@ -903,7 +946,8 @@ def annotate(doc, pg, mapping, trans, report):
     n = 0
     for d in draws:
         if d[0] == "lbl":
-            _, (kind, fs, ls, bb), leader, src = d
+            _, (kind, fs, ls, bb), leader, src = d[:4]
+            low = len(d) > 4 and d[4]
             c.setFont(FONT, fs)
             if kind == "v":
                 c.saveState()
@@ -912,11 +956,15 @@ def annotate(doc, pg, mapping, trans, report):
                 yy = 0
                 for t in ls:
                     c.drawString(0, yy, t); yy -= fs * 1.15
+                    if low:
+                        _dots(c, 0, yy + fs * 1.15 - fs * 0.16, sw(t, fs))
                 c.restoreState()
             else:
                 yy = bb[1]
                 for t in ls:
                     c.drawString(bb[0], Y(yy + fs * 0.92), t); yy += fs * 1.18
+                    if low:
+                        _dots(c, bb[0], Y(yy - fs * 0.14), sw(t, fs))
             if leader:
                 c.setLineWidth(0.3)
                 sx = min(max((bb[0] + bb[2]) / 2, src[0]), src[2]); sy = src[3] if bb[1] > src[3] else src[1]

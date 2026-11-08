@@ -61,6 +61,11 @@ def main():
             if j:
                 for m in MARK.finditer(json.dumps(j, ensure_ascii=False)):
                     valid.add(m.group(1) + m.group(2))
+        for src in cfg.mark_sources or []:          # related volumes: marks defined there (МН items ...)
+            for f in sorted(C._p(cfg.root, src).glob("p*.json")):
+                if f.name.count(".") == 1:
+                    for m in MARK.finditer(f.read_text(encoding="utf-8")):
+                        valid.add(m.group(1) + m.group(2))
     problems = []
     for pg in range(1, n + 1):
         if not ctx.lines(pg).exists():

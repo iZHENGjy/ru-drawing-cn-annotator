@@ -11,6 +11,8 @@ dependencies = ["pymupdf>=1.24", "jieba>=0.42", "ezdxf>=1.3", "pdfplumber>=0.11"
 [project.optional-dependencies]
 dev = ["pytest>=8"]
 scan = ["rapidocr>=3", "onnxruntime>=1.17"]
+# optional: only for [llm] backend = "anthropic" (the default backend claude-cli needs the `claude` CLI instead)
+llm = ["anthropic>=1"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

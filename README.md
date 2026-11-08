@@ -25,6 +25,18 @@ keeps the drawing as it is and **adds** the Chinese: blue vector text next to ev
 label, note and table cell (PDF), or a separate `CN_TRANSLATION` layer (DWG/DXF). The result
 prints as one bilingual sheet.
 
+## Production pipeline (one command)
+
+```bash
+python scripts/rudraw.py doctor                      # check Python deps, Tesseract, font, claude CLI
+python scripts/rudraw.py init my_job --pdf vol1.pdf  # writes project.toml, detects scan vs text layer
+cd my_job && python scripts/rudraw.py run            # resumable; `status` / `cost` show progress and spend
+```
+
+OCR, translation memory, four constrained LLM tasks (phrase translation, page notes, audit review,
+visual review), build, audit and the delivery gates run as one resumable job with an exact cost
+ledger and a replay cache. See [docs/pipeline.md](docs/pipeline.md).
+
 ## Highlights
 
 - **Original untouched** – Chinese is an added layer; every line, dimension and Russian word

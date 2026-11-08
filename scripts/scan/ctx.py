@@ -53,6 +53,7 @@ class ScanConfig:
     toc_title_zh: str = ""
     skip_regex: str = ""                  # audit: OCR texts that never need Chinese (sheet codes ...)
     names: list[str] = field(default_factory=list)      # [keep] names: signatures, designer logo ...
+    mark_sources: list[str] = field(default_factory=list)   # notes folders of related volumes (marks defined there)
 
 
 def _p(root: Path, v):

@@ -47,13 +47,23 @@ def norm_ru(t):
     return re.sub(r"[^а-яa-z0-9$]", "", t.lower().replace("ё", "е")).translate(LOOK)
 
 
+def name_in(x, n2):
+    """name prefix ``x`` in normalised text ``n2``; one OCR letter error allowed for prefixes of
+    6 letters (Бописова for Борисова: п read for р)"""
+    if x in n2:
+        return True
+    if len(x) < 6:
+        return False
+    return any(sum(a != b for a, b in zip(n2[i:i + len(x)], x)) <= 1 for i in range(len(n2) - len(x) + 1))
+
+
 def make_auto_skip(cfg):
     names = [norm_ru(n)[:6] for n in cfg.names if len(norm_ru(n)) >= 4]
     skip = re.compile(cfg.skip_regex, re.I) if cfg.skip_regex else None
 
     def auto_skip(t):
         n = t.lower().replace("ё", "е"); n2 = norm_ru(t)
-        if names and any(x in n2 for x in names):
+        if names and any(name_in(x, n2) for x in names):
             return "人名/标识"
         if skip and skip.search(t):
             return "项目跳过规则"
@@ -177,9 +187,9 @@ def packet(ctx, pg, a, auto_skip, fnt):
         ImageDraw.Draw(im).rectangle([(bb[0] - vx0) * k - 3, (bb[1] - vy0) * k - 3, (bb[2] - vx0) * k + 3,
                                       (bb[3] - vy0) * k + 3], outline=(230, 0, 0), width=3)
         if im.width > 1500:
-            im = im.resize((1500, int(im.height * 1500 / im.width)))
+            im = im.resize((1500, max(1, int(im.height * 1500 / im.width))))
         if im.height > 420:
-            im = im.resize((int(im.width * 420 / im.height), 420))
+            im = im.resize((max(1, int(im.width * 420 / im.height)), 420))
         crops.append((i, im))
         ctxl = []
         for d, ob, t in near(bb, rap, 60 if big else 30):

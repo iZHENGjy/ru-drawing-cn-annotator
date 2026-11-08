@@ -49,3 +49,34 @@ words = []                               # Chinese terms that must never be brok
 # toc_title_ru = "…"                     # contents page heading
 # toc_title_zh = "…"
 # Signatures and the designer's logo go in [keep] names: the audit never asks for them.
+
+# ---------------------------------------------------------------------------------------
+# Production pipeline: python scripts/rudraw.py doctor / run, see docs/pipeline.md
+# [llm]
+# backend = "claude-cli"                 # claude-cli (headless `claude -p`) | anthropic (ANTHROPIC_API_KEY) | fake
+# concurrency = 4
+# budget_usd = 20                        # hard stop before a call would exceed it
+# background = ""                        # project background for the translator (keep private)
+# timeout_s = 600
+# max_retries = 2
+# [llm.models]
+# phrase_translate = "sonnet"
+# page_notes = "sonnet"
+# audit_review = "haiku"
+# visual_review = "sonnet"
+#
+# [tm]
+# project = "tm/project.json"            # written by the run
+# shared = []                            # read-only TMs of earlier volumes, e.g. ["../vol1/tm/project.json"]
+# glossaries = []                        # gost_general.json + spds_sheet_frame.json are always added
+#
+# [job]
+# batch_size = 60                        # phrases per phrase_translate call
+# max_audit_loops = 2
+# visual = false                         # LLM visual review of QA-flagged tiles (costly)
+# visual_max_tiles = 60
+# qa = true
+#
+# [output]
+# appendix = false                       # RU->CN materials / standards reference pages at the end
+# compact = false                        # omit tiny count labels (根/件) and their legend entries

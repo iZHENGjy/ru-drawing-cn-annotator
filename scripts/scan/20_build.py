@@ -1,6 +1,11 @@
 """Step 4 — build the bilingual PDF from the maps (and a clickable table of contents).
 
-    python scripts/scan/20_build.py [--config project.toml] [--pages 3,5] [--no-toc]
+    python scripts/scan/20_build.py [--config project.toml] [--pages 3,5] [--no-toc] [--appendix] [--compact]
+
+Opt-in (also project.toml ``[output] appendix = true`` / ``compact = true``; default off = unchanged output):
+  --appendix  reference pages (仅供参考) at the end: RU->CN approximate grades / standards found in the set
+  --compact   精简版: no per-word 根/间距/件 count labels (and no legend line for them)
+Low-confidence Chinese is marked with a dotted underline whenever work/map/pNN.meta.json exists.
 
 Output: output/<code>_中文对照版.pdf (full set) or output/<code>_test.pdf (--pages), plus
 work/review/build_report.tsv: one row per decision that is not a plain placement
@@ -127,12 +132,35 @@ def add_toc(ctx, src_pdf, out_pdf):
     return k
 
 
+def output_opts(config_path, args):
+    """CLI flags win; otherwise project.toml [output] appendix / compact."""
+    import tomllib
+    p = Path(config_path or "project.toml").resolve()
+    t = {}
+    if p.exists():
+        t = tomllib.loads(p.read_text(encoding="utf-8")).get("output", {})
+    return bool(args.appendix or t.get("appendix", False)), bool(args.compact or t.get("compact", False))
+
+
+def add_appendix(ctx, final_pdf, pages):
+    from scan import appendix
+    hits = appendix.detect(appendix.collect_texts(ctx, pages))
+    tmp = Path(str(final_pdf) + ".tmp")
+    n = appendix.append_to_pdf(final_pdf, tmp, hits, ctx.cfg.code)
+    tmp.replace(final_pdf)
+    print(f"   + appendix: {len(hits)} reference row(s), {n} page(s)" if n else "   (appendix: no known grades / standards found)")
+    return n
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--config")
     ap.add_argument("--pages")
     ap.add_argument("--no-toc", action="store_true")
+    ap.add_argument("--appendix", action="store_true", help="add the RU->CN reference appendix (仅供参考)")
+    ap.add_argument("--compact", action="store_true", help="精简版: no 根/间距/件 count labels")
     a = ap.parse_args()
+    with_appendix, engine.OPTS["compact"] = output_opts(a.config, a)
     cfg = C.load(a.config)
     ctx = C.Ctx(cfg); ctx.mkdirs(); engine.init(ctx)
     n = pymupdf.open(cfg.pdf).page_count
@@ -150,6 +178,8 @@ def main():
     else:
         k = add_toc(ctx, body, final); body.unlink()
         print(f"   + {k} contents page(s) -> {final}")
+    if with_appendix:
+        add_appendix(ctx, final, list(range(1, n + 1)))
     lost = [r for r in rep if r[2] in ("未放置",)]
     if lost:
         print(f"!! {len(lost)} label(s) could not be placed — see build_report.tsv")

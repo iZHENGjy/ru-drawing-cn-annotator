@@ -52,6 +52,24 @@ python $R/50_check.py
 python $R/40_tiles.py --round 1                  # visual review; then 41_apply_visual.py --round 1
 ```
 
+## Automatic mapping (translation memory)
+
+The per-page translator and line-map steps above are now automated (`rudraw run`, see
+[pipeline.md](pipeline.md)):
+
+1. `scan/segments.py` collects every Cyrillic OCR reading of the volume, normalises it (look-alike
+   letters, dashes, numbers to `⟨n⟩`) and merges near-duplicates, so a phrase is handled once per volume.
+2. `scan/tmstore.py` looks each phrase up in the layers glossary < shared < project; rules mark names,
+   codes and OCR garbage as keep/skip. Only the misses go to the `phrase_translate` task.
+3. `scan/packets.py` builds the `page_notes` input (title block and notes crops + OCR) and
+   `scan/automap.py` writes `work/notes/pNN.json` and `work/map/pNN.json` (plus `pNN.meta.json` with
+   per-line confidence). Numbers are kept only when Tesseract and RapidOCR agree; otherwise they are
+   dropped from the Chinese and the line is drawn as low-confidence (dotted underline).
+
+The output format is unchanged, so `20_build.py`, the audit and the gates work as before. The manual
+`prompt_map.md` step is now the fallback: use it for a page the automatic route cannot handle, or
+edit `map/pNN.fix.json`.
+
 ## What the engine does on a scan (`scan/engine.py`)
 
 - **Ink and line masks** at 72 dpi: text ink (without long rules) and horizontal/vertical

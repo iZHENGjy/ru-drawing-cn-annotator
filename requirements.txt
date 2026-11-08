@@ -8,4 +8,5 @@ reportlab>=4.0     # demo drawing generator; scanned route drawing
 pypdf>=4.0         # scanned route: page merge
 pillow>=10         # scanned route: review crops
 # rapidocr + onnxruntime: optional second OCR detector for scans (pip install rapidocr onnxruntime)
+# anthropic: optional, only for [llm] backend = "anthropic" (default backend claude-cli needs the `claude` CLI instead)
 pytest>=8
