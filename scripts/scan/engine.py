@@ -14,7 +14,7 @@ from collections import defaultdict
 
 import fitz
 import numpy as np
-from pypdf import PdfReader
+from pypdf import PdfReader, PdfWriter
 from pypdf.generic import RectangleObject
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
@@ -263,7 +263,8 @@ class Placer:
 
 def annotate(doc, pg, mapping, trans, report):
     reader = PdfReader(str(CTX.cfg.pdf))
-    page = reader.pages[pg - 1]
+    # pypdf >= 7 only edits content streams of pages that belong to a writer
+    page = PdfWriter().add_page(reader.pages[pg - 1])
     if page.rotation:
         page.transfer_rotation_to_content()
     PW, PH = float(page.mediabox.width), float(page.mediabox.height)
