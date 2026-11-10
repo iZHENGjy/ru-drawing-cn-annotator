@@ -15,7 +15,7 @@
 <p align="center"><img src="docs/img/hero.png" alt="Russian general notes before and after: Chinese translation added in blue under each clause" width="100%"></p>
 
 <p align="center">
-  <a href="#demo">Demo</a> · <a href="#how-it-works">How it works</a> · <a href="#quickstart">Quickstart</a> · <a href="#limitations">Limitations</a> · <a href="#中文说明">中文说明</a>
+  <a href="#production-pipeline-one-command">Pipeline</a> · <a href="#cost">Cost</a> · <a href="#demo">Demo</a> · <a href="#how-it-works">How it works</a> · <a href="#quickstart">Quickstart</a> · <a href="#limitations">Limitations</a> · <a href="#中文说明">中文说明</a>
 </p>
 
 Drawings made to Russian standards (ГОСТ / СПДС) often have to be handed to Chinese
@@ -33,9 +33,78 @@ python scripts/rudraw.py init my_job --pdf vol1.pdf  # writes project.toml, dete
 cd my_job && python scripts/rudraw.py run            # resumable; `status` / `cost` show progress and spend
 ```
 
-OCR, translation memory, four constrained LLM tasks (phrase translation, page notes, audit review,
-visual review), build, audit and the delivery gates run as one resumable job with an exact cost
-ledger and a replay cache. See [docs/pipeline.md](docs/pipeline.md).
+A drawing set goes in, a printable bilingual PDF, a cost report and a delivery-gate summary come
+out. Code does everything that has a right answer: OCR, deduplication, translation memory, mapping
+lines to Chinese, placement and checks. The LLM is used only in four narrow tasks, each with a
+fixed input packet, a JSON Schema and a validator. Details: [docs/pipeline.md](docs/pipeline.md).
+
+### Pipeline design
+
+```mermaid
+flowchart LR
+    A[Scanned PDF] --> B[OCR x2<br/>Tesseract + RapidOCR]
+    B --> C[Dedupe the volume<br/>numbers -> ⟨n⟩]
+    C --> D{Translation memory<br/>glossary · other volumes · project}
+    D -- hit --> F
+    D -- new phrases --> E1[🤖 phrase_translate<br/>batches of 60, text only]
+    B --> E2[🤖 page_notes<br/>title + notes crops]
+    E1 --> F[automap<br/>line -> Chinese by code]
+    E2 --> F
+    F --> G[build<br/>placement engine]
+    G --> H[coverage audit]
+    H -- leftovers --> E3[🤖 audit_review<br/>small crops]
+    E3 --> G
+    H --> I[member-mark gate]
+    I --> J[QA: font size,<br/>lines, ink]
+    J -- flagged tiles only --> E4[🤖 visual_review]
+    J --> K[bilingual PDF<br/>+ cost report + gates]
+```
+
+| Guard rail | How |
+|---|---|
+| Numbers | Stored as `⟨n⟩` placeholders; a number enters the Chinese only when both OCR engines read it the same way |
+| Member marks (Км1.2, МН4) | Never fuzzy-matched; OCR letter swaps and dropped dots corrected against the sheet titles; the gate fails on any unknown mark |
+| LLM answers | JSON Schema + validator (placeholders, digits, marks, grades, standards); a rejected answer is retried, never used |
+| Coverage | Every Russian box found by either OCR engine must end up translated, in the legend, or explicitly accepted |
+| Repeatability | Every LLM answer is cached; re-running the same input gives a byte-identical PDF at zero cost |
+
+### Sample output (synthetic drawing, scanned route)
+
+These come from `demo/demo_drawing.pdf` rasterised to an image-only "scan" and put through the
+pipeline end to end. No client material.
+
+| Scan (input) | Output |
+|:-:|:-:|
+| ![notes, section and schedule, input](docs/img/scan_notes_table_before.png) | ![notes, section and schedule, output](docs/img/scan_notes_table_after.png) |
+| ![bilingual general notes, input](docs/img/scan_general_notes_before.png) | ![bilingual general notes, output](docs/img/scan_general_notes_after.png) |
+| ![plan callouts, input](docs/img/scan_plan_before.png) | ![plan callouts, output](docs/img/scan_plan_after.png) |
+| ![title block, input](docs/img/scan_titleblock_before.png) | ![title block, output](docs/img/scan_titleblock_after.png) |
+
+Chinese goes directly under the Russian. Numbered notes get a Chinese block with clause numbers,
+and on bilingual RU/EN sheets each clause gets its own line. Schedule headers and names are
+labelled in their cells. Title-block fields go into one bilingual legend line instead of being
+squeezed into the signature cells.
+
+### Cost
+
+Every LLM call is metered (tokens, images, USD) and summarised per stage in
+`work/job/cost_report.md`. Measured with Claude via the `claude` CLI, list prices:
+
+| Set | Sheets | phrase_translate | page_notes | audit + visual review | Total | Per sheet |
+|---|--:|--:|--:|--:|--:|--:|
+| Synthetic demo (above) | 2 | $0.03 | $0.05 | $0.05 | **$0.13** | $0.06 |
+| Embedded-items volume, real scans | 26 | $0.17 | $0.35 | $0.26 | **$0.79** | $0.03 |
+| RC volume (dense rebar sheets), real scans | 43 | $1.19 | $1.67 | $0.47 | **$3.33** | $0.08 |
+| Both real volumes, earlier agent-driven workflow (no pipeline) | 69 | | | | ≈ $94 | ≈ $1.36 |
+
+- **What drives the cost:** `page_notes` (one call per sheet with small crops) and new phrases. A
+  volume is deduplicated before anything is sent: 1074 Russian OCR lines became about 320 phrases,
+  and the public glossaries already covered about half of those.
+- **Re-runs:** identical input replays from the cache for $0.00.
+- **Sharing a translation memory:** reusing one volume's memory for the next saves most on
+  revisions and volumes of the same kind. Across different kinds (embedded items vs rebar) the
+  saving was small.
+- **Budget:** `budget_usd` in `project.toml` stops the run before it is exceeded.
 
 ## Highlights
 
@@ -250,6 +319,26 @@ included and are only invoked as external programs.
 - **按位置区分多义词**：`@tb|Лист`（图签里是"张号"）与 `@body|Лист`（正文里是"钢板"）。
 - **中文按词换行**（jieba 分词），句末标点不出现在行首；数字、代号、标准号整体不拆。
 - 自带一份通用 ГОСТ/СПДС 图签与常用术语词表（`glossary/gost_general.json`），项目词库叠加在上面。
+
+### 生产流水线与成本
+
+- **一条命令**:`python scripts/rudraw.py run` 按阶段跑完一个任务。
+  - 可断点续跑,每个阶段的产物和日志都落盘。
+  - 结束时输出中文对照版 PDF、成本报表(`work/job/cost_report.md`)和交付关卡结果。
+- **LLM 只用在 4 处**:新短语翻译、整页标题与说明、审计复核、看图复核(只看 QA 标出的可疑区域)。
+  - 每处都有固定输入、JSON Schema 和代码校验,数字、代号、钢号、标准号对不上就拒收。
+  - 去重、查翻译记忆、行与译文的对应、排版、检查,全部由代码完成。
+- **稳定**:LLM 回答都进缓存,同一输入重跑,输出逐字节一致、0 费用。
+- **实测成本**:
+
+| 图册 | 页数 | 每页成本 |
+|---|--:|--:|
+| 合成演示 | 2 | $0.06 |
+| 真实扫描件,预埋件册 | 26 | $0.03 |
+| 真实扫描件,配筋册 | 43 | $0.08 |
+| 改造前(两册合计,靠 agent 临场处理) | 69 | 约 $1.36 |
+
+- 样品图与流程图见上文 [Production pipeline](#production-pipeline-one-command);样品全部来自合成图纸,不含任何客户资料。
 
 ### 快速开始
 
