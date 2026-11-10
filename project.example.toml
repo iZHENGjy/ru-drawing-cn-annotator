@@ -30,3 +30,53 @@ words = []                               # Chinese terms that must never be brok
 # name = "General notes"
 # first = 1
 # last = 4
+
+# ---------------------------------------------------------------------------------------
+# Scanned PDFs (no text layer): scripts/scan/, see docs/scanned.md
+# [scan]
+# pdf = "input/scan.pdf"                 # image-only drawing PDF
+# code = "KZH1"                          # short tag for output names and reports
+# work = "scan"                          # work folder (png/ ocr/ lines/ rapid/ notes/ map/ ...)
+# output = "output"
+# tessdata = "tessdata"                  # folder with rus.traineddata (tessdata_best) + configs/
+# count_word = "根"                       # шт./pcs. label: 根 for rebar sets, 件 for embedded items / parts
+# title_code_regex = "^XXXX-"            # drawing-code prefix: helps locate the title block
+# skip_regex = '^\W*О[ДD]\W*/?\W*R[TТ]\W*$'   # OCR texts that never need Chinese (volume codes ...)
+# stamp_image_size = [322, 174]          # raster approval stamp: pixel size of its image
+# stamp_zh = "准予施工章:……"              # one Chinese line for that stamp
+# stamp_merge_regex = "准予施工|批准用于施工"  # stamp-line translations folded into stamp_zh
+# notice_zh = "本文件为……所有,未经其同意不得复制和传播"   # vertical ownership notice in the margin
+# toc_title_ru = "…"                     # contents page heading
+# toc_title_zh = "…"
+# Signatures and the designer's logo go in [keep] names: the audit never asks for them.
+
+# ---------------------------------------------------------------------------------------
+# Production pipeline: python scripts/rudraw.py doctor / run, see docs/pipeline.md
+# [llm]
+# backend = "claude-cli"                 # claude-cli (headless `claude -p`) | anthropic (ANTHROPIC_API_KEY) | fake
+# concurrency = 4
+# budget_usd = 20                        # hard stop before a call would exceed it
+# background = ""                        # project background for the translator (keep private)
+# timeout_s = 600
+# max_retries = 2
+# [llm.models]
+# phrase_translate = "sonnet"
+# page_notes = "sonnet"
+# audit_review = "haiku"
+# visual_review = "sonnet"
+#
+# [tm]
+# project = "tm/project.json"            # written by the run
+# shared = []                            # read-only TMs of earlier volumes, e.g. ["../vol1/tm/project.json"]
+# glossaries = []                        # gost_general.json + spds_sheet_frame.json are always added
+#
+# [job]
+# batch_size = 60                        # phrases per phrase_translate call
+# max_audit_loops = 2
+# visual = false                         # LLM visual review of QA-flagged tiles (costly)
+# visual_max_tiles = 60
+# qa = true
+#
+# [output]
+# appendix = false                       # RU->CN materials / standards reference pages at the end
+# compact = false                        # omit tiny count labels (根/件) and their legend entries
