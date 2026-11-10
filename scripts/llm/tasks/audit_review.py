@@ -35,7 +35,7 @@ def render(payload):
     d = payload["data"]
     imgs = [Path(p) for p in payload.get("images") or []]
     # crop-sheet lines carry local paths: keep only the file name
-    md = re.sub(r"(裁图联排:\s*)(\S.*?)(\s+\(含)", lambda m: m.group(1) + Path(m.group(2)).name + m.group(3),
+    md = re.sub(r"(裁图联排:\s*)(\S.*?)(\s+\(含)", lambda m: m.group(1) + re.split(r"[\\/]", m.group(2))[-1] + m.group(3),
                 d["packet"])
     head = ""
     if imgs:
