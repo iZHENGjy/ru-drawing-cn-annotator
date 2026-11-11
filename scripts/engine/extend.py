@@ -115,7 +115,7 @@ def paragraphs(frs, hs, vs):
             ov = min(r.x1, p["rect"].x1) - max(r.x0, p["rect"].x0)
             if ov < 0.3 * min(r.width, p["rect"].width):
                 continue
-            if _h_between(hs, max(r.x0, p["rect"].x0), min(r.x1, p["rect"].x1), last.y1 - 1, r.y0 + 1):
+            if _h_between(hs, max(r.x0, p["rect"].x0), min(r.x1, p["rect"].x1), min(last.y1 - 1, (last.y0 + last.y1) / 2 + 1), max(r.y0 + 1, (r.y0 + r.y1) / 2 - 1)):
                 continue
             if _v_between(vs, min(r.x0, p["rect"].x0) - 1, max(r.x0, p["rect"].x0) + 1, r.y0, r.y1) and \
                     abs(r.x0 - p["rect"].x0) > 3:
@@ -180,13 +180,15 @@ def collect(page, tm, tb):
     paras = paragraphs(frs, hs, vs)
     body, legend, missing = [], [], 0
     for p in paras:
-        if len(CYR.findall(p["text"])) < 2:
-            continue
         c = (p["rect"].tl + p["rect"].br) / 2
         stamp = tb[0] if tb else pymupdf.Rect()             # left margin strip: only text set inside it
         in_tb = any(c in t for t in tb[1:]) or (p["rect"].x1 <= stamp.x1 and p["lines"][0]["vert"]) \
             or (c.y > page.rect.height * 0.85 and _tb_fields_only(p["text"]))
         text = p["text"]
+        if len(CYR.findall(text)) < 2:                     # codes / numbers: kept as they are (table cells)
+            if not in_tb and text.strip():
+                body.append((p, None))
+            continue
         if in_tb:                                          # sheet code / page number are not field names
             text = " ".join(t for t in text.split() if not re.search(r"\d", t)).strip()
             if len(CYR.findall(text)) < 2:
@@ -195,6 +197,8 @@ def collect(page, tm, tb):
         if zh is None:
             missing += 1; continue
         if not zh:
+            if not in_tb:
+                body.append((p, None))                     # 'keep' (names, standard numbers): shown as is in a row
             continue
         if in_tb:
             if (text, zh) not in legend:
@@ -222,28 +226,40 @@ def collect(page, tm, tb):
     for p, zh in body:
         key = row_of(p["rect"], p["size"])
         if key is None:
+            if zh is None:
+                continue
             plain.append(dict(y=p["rect"].y0, zh=zh, x0=p["rect"].x0, x1=p["rect"].x1, size=p["size"]))
         else:
             rows.setdefault(key, []).append((p, zh))
+    # a merged cell spanning several rows joins the first row it spans
+    for key in sorted(rows, key=lambda k: k[1] - k[0], reverse=True):
+        inner = [k for k in rows if k != key and key[0] - 0.5 <= k[0] and k[1] <= key[1] + 0.5]
+        if inner:
+            rows[min(inner)].extend(rows.pop(key))
     entries, rules = [], set()
     frame = 0.6 * page.rect.height                          # the sheet frame is not a table rule
     for (top, bot), cells in list(rows.items()):
         x0 = min(p["rect"].x0 for p, _ in cells)
         vx = sorted(set(snap({x for x, ya, yb in vs if yb - ya < frame
                               and min(yb, bot) - max(ya, top) > 0.6 * (bot - top)}).values()))
-        if len(vx) < 2:                                     # no cell walls: text between tables, not a row
+        if len(vx) < 2 or all(zh is None for _, zh in cells):   # no cell walls / nothing to translate
             for p, zh in cells:
+                if zh is None:
+                    continue
                 plain.append(dict(y=p["rect"].y0, zh=zh, x0=p["rect"].x0, x1=p["rect"].x1, size=p["size"]))
             continue
         def col(r):
             return sum(1 for x in vx if x < (r.x0 + r.x1) / 2)
         bycol = {}
         for p, zh in sorted(cells, key=lambda t: (col(t[0]["rect"]), t[0]["rect"].y0)):
-            bycol.setdefault(col(p["rect"]), []).append(zh)
-        # the row number: a number alone in the first column of this row
-        num = next((f["text"].strip().rstrip(".") for f in frs
-                    if not f["vert"] and f["rect"].y0 >= top - 2.5 and f["rect"].y1 <= bot + 2.5 and f["rect"].x1 <= x0 + 1
-                    and re.fullmatch(r"\d{1,3}\.?", f["text"].strip())), None)
+            bycol.setdefault(col(p["rect"]), []).append(
+                zh if zh is not None else re.sub(r"(\d)- (\d)", r"\1-\2", p["text"]))   # ГОСТ 28638- / 90
+        # the row number: a number alone in the first column of this row (not repeated as a field)
+        num = None
+        first = min(bycol)
+        if len(bycol[first]) == 1 and re.fullmatch(r"\d{1,3}\.?", bycol[first][0].strip()):
+            num = bycol.pop(first)[0].strip().rstrip(".")
+        # every column is shown: translated cells in Chinese, the others as in the original
         zh = " | ".join(" ".join(z) for _, z in sorted(bycol.items()))
         entries.append(dict(y=top, zh=(f"{num}. " if num else "") + zh, bot=bot))
         rules |= {top, bot}
@@ -303,14 +319,17 @@ def render(page, tm, tb, dry=False):
     if dry or not (entries or legend):
         return st
     PW, PH = page.rect.width, page.rect.height
-    plan = None
+    plan = fit = None
     for colw in (PW * 0.62, PW * 0.8, PW * 1.0):
         for fs in (FS, 8.5, FS_MIN):
             lines, bottom, ok = layout(entries, legend, PW, PH, fs, colw)
             if bottom <= PH - 12 and ok:
                 plan = (lines, bottom, fs, colw); break
+            if bottom <= PH - 12 and fit is None:
+                fit = (lines, bottom, fs, colw)        # fits; only some tight table rows use a smaller size
         if plan:
             break
+    plan = plan if plan and (fit is None or plan[3] == fit[3]) else (fit or plan)
     if plan is None:                                       # keep the table rows if the page still fits
         colw, fs = PW * 1.0, FS_MIN
         lines, bottom, ok = layout(entries, legend, PW, PH, fs, colw)

@@ -31,7 +31,10 @@ for its notes pages.
   - A data row starts with its row number (`11.`), then its fields in column order separated by
     ` | `, top-aligned between the row's two rules; long text wraps (and the size is reduced) but
     never crosses the next rule.
-  - Cells holding only codes, standard numbers or numbers (ГОСТ 7211-86, 2) are not repeated.
+  - **Every column is listed**, in column order: translated cells in Chinese, cells that need no
+    translation (codes, standard numbers, numbers: ГОСТ 7211-86, 2, -) copied as they are, so
+    the fields of a row always correspond to the columns.
+  - A merged cell that spans several rows joins the first row it spans.
   - A cell's text is one paragraph, never broken into its lines. A table continued from the
     previous page follows the same rules with its own row numbers.
   - A row is a band between two horizontal rules crossed by inner cell walls; the sheet frame is

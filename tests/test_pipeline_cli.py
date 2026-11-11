@@ -378,6 +378,7 @@ def test_extension_table_rows_keep_row_numbers_and_rules():
     page.insert_text((105, 120), "Наименование", fontname="china-s", fontsize=10)
     page.insert_text((305, 120), "Назначение", fontname="china-s", fontsize=10)
     page.insert_text((80, 150), "7", fontname="china-s", fontsize=10)
+    page.draw_line((400, 100), (400, 160)); page.insert_text((405, 150), "ГОСТ 12.4.253-2013", fontname="china-s", fontsize=10)
     page.insert_text((105, 150), "Защитные очки", fontname="china-s", fontsize=10)
     page.insert_text((305, 150), "Защита глаз", fontname="china-s", fontsize=10)
     zh = {"Наименование": "名称", "Назначение": "用途", "Защитные очки": "防护眼镜", "Защита глаз": "眼部防护"}
@@ -386,5 +387,5 @@ def test_extension_table_rows_keep_row_numbers_and_rules():
             return zh.get(text, ""), text
     entries, legend, st = extend.collect(page, FakeTM(), [pymupdf.Rect()])
     rows = [(round(e["y"]), e["zh"], round(e["bot"])) for e in entries if e.get("bot")]
-    assert rows == [(100, "名称 | 用途", 130), (130, "7. 防护眼镜 | 眼部防护", 160)]
+    assert rows == [(100, "№ | 名称 | 用途", 130), (130, "7. 防护眼镜 | 眼部防护 | ГОСТ 12.4.253-2013", 160)]
     assert st["rules"] == [100.0, 130.0, 160.0]
