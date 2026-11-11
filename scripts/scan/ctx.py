@@ -55,6 +55,8 @@ class ScanConfig:
     names: list[str] = field(default_factory=list)      # [keep] names: signatures, designer logo ...
     mark_sources: list[str] = field(default_factory=list)   # notes folders of related volumes (marks defined there)
     accept_marks: list[str] = field(default_factory=list)   # marks checked by a person (e.g. a typo in the original): listed, not failed
+    output_standard: int = 1              # 2 = docs/output_standard.md: prose -> extension column, title block
+                                          # -> one legend line, no label above its Russian (1 = approved layout)
 
 
 def _p(root: Path, v):

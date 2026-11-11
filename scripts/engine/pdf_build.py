@@ -18,7 +18,7 @@ import csv, json, re, time
 from collections import Counter
 from pathlib import Path
 import pymupdf
-from . import place
+from . import extend, place
 from .config import DEFAULT_TB_ANCHORS
 from .layout import analyse, page_words, to_frame_rect, from_frame_rect, word_lang, Word
 from .place import (Obstacles, Painter, pair_runs, en_slots, extra_slots_below, fit, wrap,
@@ -232,6 +232,22 @@ def split_clauses(lines):
     return out
 
 
+def split_paragraphs(num, items, indent=10.0):
+    """Split one clause of stream lines into paragraphs at first-line indents (prose pages):
+    a line that starts more than ``indent`` pt right of the column's left edge opens a new
+    paragraph.  The first paragraph keeps ``num``; the others get ''."""
+    if len(items) < 2:
+        return [(num, items)]
+    left = min(it[0].x0 for it in items)
+    out = [(num, [items[0]])]
+    for it in items[1:]:
+        if it[0].x0 - left > indent:
+            out.append(("", [it]))
+        else:
+            out[-1][1].append(it)
+    return out
+
+
 def _next_num(prev, cur):
     try:
         return float(cur.split(".")[0]) >= float(prev.split(".")[0])
@@ -290,6 +306,17 @@ def build(pdf, pages, out_path, tm: TM, review_dir, notes_mode="inplace", notes_
         runs, words, other, segs = analyse(page)
         tb = title_block(page, words, tb_anchors, left_stamp)
         issues = []
+
+        # ---- running-text page (docs/output_standard.md): extension column on the right
+        if keep_en and pn in notes_pages:
+            st = extend.render(page, tm, tb, dry=dry)
+            rows.append({"page": pn, "units": st["paras"], "ok": st["paras"] - st["missing"],
+                         "missing": st["missing"], "overflow": 0, "callout": 0, "unplaced": 0, "ru_lost": 0,
+                         "en_residual": 0, "overlap": 0, "appendix_clauses": 0,
+                         "issues": [f"缺译 {st['missing']} 段"] if st["missing"] else []})
+            log(f"p{pn}: extend paras={st['paras']} missing={st['missing']} fs={st.get('fs', '-')} "
+                f"col={st.get('width', '-')} grown={st.get('grown', 0)}")
+            continue
 
         # ---- long notes stream (general notes pages)
         notes_units = []
@@ -364,6 +391,8 @@ def build(pdf, pages, out_path, tm: TM, review_dir, notes_mode="inplace", notes_
         for nru, nen, rboxes, eboxes in notes_units:
             rcl = split_clauses(stream_lines(nru, rboxes))
             ecl = dict((n, l) for n, l in split_clauses(stream_lines(nen, eboxes)))
+            if not nen:                          # Russian-only prose: keep its paragraphs apart
+                rcl = [p for num, items in rcl for p in split_paragraphs(num, items)]
             for num, items in rcl:
                 text_lines = [" ".join(w.text for w in it[1]) for it in items]
                 if num:
@@ -523,12 +552,19 @@ def build(pdf, pages, out_path, tm: TM, review_dir, notes_mode="inplace", notes_
                 appendix.append((num, zh))
                 issues.append(f"第{num}条原位放不下，转附页")
         # (c) Russian without English: nearby free space, else callout
+        to_list = []
         for u in units:
             if not u.zh or u.en is not None:
                 continue
             o = u.ru.orient
             ign = redacted | {id(w) for w in u.ru.words}
             fs, lines, slots = place_insert(u, obs, ign, o)
+            if fs is None and pn in notes_pages:
+                # prose page with an inserted Chinese page: a label that has no room beside its
+                # Russian (table cells, figure captions) is listed there as "Russian → Chinese"
+                to_list.append(u)
+                u.status = "appendix"
+                continue
             if fs is None:
                 callouts += 1
                 mark = marker(callouts)
@@ -545,6 +581,15 @@ def build(pdf, pages, out_path, tm: TM, review_dir, notes_mode="inplace", notes_
                 painter.line(t, sl, fs, o)
             u.placed.extend(slots)
             reserve(obs, slots, o)
+        if to_list:
+            to_list.sort(key=lambda u: (round(u.ru.frect.y0 / 4), u.ru.frect.x0))
+            appendix.append(("", "表格及图中文字（俄文 → 中文，按原页从上到下）："))
+            seen = set()
+            for u in to_list:                    # a repeated cell ("По факту") is listed once
+                t = f"{join_ru(u.ru)} → {u.zh}".replace("\n", " ")
+                if t not in seen:
+                    seen.add(t)
+                    appendix.append(("", t))
         if appendix and notes_mode == "appendix" and not keep_en:
             # pointer where the English notes were
             boxes = [b for nu in notes_units for b in nu[3]]

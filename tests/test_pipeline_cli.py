@@ -297,3 +297,95 @@ def test_shim_dry_run_both_routes(tmp_path):
     r = subprocess.run([sys.executable, str(ROOT / "scripts" / "rudraw.py"), "status",
                         "--config", str(tmp_path / "s" / "project.toml")], capture_output=True, text=True, encoding="utf-8")
     assert r.returncode == 0 and "pending" in r.stdout
+
+
+def test_text_route_translate_writes_validated_batch(tmp_path):
+    """The text route's translate stage runs phrase_translate (fake backend) over tm_todo.json and
+    writes a batch.tsv that merge_tm accepts; afterwards no TM key is missing."""
+    folder = tmp_path / "t"
+    assert cli.main(["init", str(folder), "--pdf", str(DEMO_PDF)]) == 0
+    toml = folder / "project.toml"
+    toml.write_text(toml.read_text(encoding="utf-8").replace('backend = "claude-cli"', 'backend = "fake"'), encoding="utf-8")
+    job = Job(JobConfig.load(toml), out=lambda *_: None)
+    assert runner.run_job(job, until="export_todo", echo=False) == 0
+    todo = {"Бетон класса B⟨1⟩ по ГОСТ ⟨2⟩": {"ru": "Бетон класса B25 по ГОСТ 26633", "pages": [1]},
+            "Схема производства работ": {"ru": "Схема производства работ", "pages": [1, 2]}}
+    (folder / "review" / "tm_todo.json").write_text(json.dumps(todo, ensure_ascii=False), encoding="utf-8")
+    assert runner.run_job(job, only="translate", echo=False) == 0
+    rows = (folder / "review" / "batch.tsv").read_text(encoding="utf-8").splitlines()
+    assert len(rows) == len(todo)
+    for row in rows:
+        i, guard, zh = row.split("	")
+        assert list(todo)[int(i)].startswith(guard) and zh == "∅"      # fake answers 'keep'
+    assert job.metrics("translate")["unresolved"] == 0
+    assert runner.run_job(job, only="merge_tm", echo=False) == 0
+    assert job.metrics("merge_tm")["merged"] == 2
+
+
+def test_split_paragraphs_at_first_line_indent():
+    from engine.pdf_build import split_paragraphs
+    R = pymupdf.Rect
+    items = [(R(90, 0, 500, 10), ["a"], None), (R(70, 12, 500, 22), ["b"], None),
+             (R(90, 24, 500, 34), ["c"], None), (R(70, 36, 300, 46), ["d"], None), (R(72, 48, 300, 58), ["e"], None)]
+    out = split_paragraphs("3", items)
+    assert [n for n, _ in out] == ["3", ""]
+    assert [[it[1][0] for it in its] for _, its in out] == [["a", "b"], ["c", "d", "e"]]
+    assert split_paragraphs("", items[:1]) == [("", items[:1])]
+
+
+def test_extension_page_widens_and_keeps_original(tmp_path):
+    """Running-text page: the original stays, the page grows to the right, Chinese only in the new column."""
+    from engine import extend
+    doc = pymupdf.open()
+    page = doc.new_page(width=595, height=842)
+    page.insert_text((80, 100), "Общие требования к производству работ", fontname="china-s", fontsize=11)
+    before = page.get_text()
+    class FakeTM:
+        def translate(self, text, ctx="body"):
+            return "施工作业一般要求", text
+    st = extend.render(page, FakeTM(), [pymupdf.Rect(0, 0, 0, 0)])
+    assert page.rect.width > 595 * 1.5 and page.rect.height == 842
+    assert st["paras"] == 1 and st["missing"] == 0 and st["fs"] >= 8
+    after = page.get_text("words")
+    assert all(w[0] >= 595 for w in after if "施工" in w[4])
+    assert "Общие требования" in page.get_text() and before.strip() in page.get_text()
+
+
+def test_scan_prose_paragraphs_join_lines_of_one_paragraph():
+    from scan import prose
+    L = [dict(id=1, box=(0.12, 0.30, 0.80, 0.32), text="ПАО и Общество с ограниченной ответственностью обсудили"),
+         dict(id=2, box=(0.08, 0.32, 0.80, 0.34), text="график выполнения строительно-монтажных работ и согласовывают"),
+         dict(id=3, box=(0.08, 0.34, 0.50, 0.36), text="его в редакции, приложенной к протоколу."),
+         dict(id=4, box=(0.08, 0.50, 0.20, 0.52), text="Руководитель проекта")]
+    pars = prose.paragraphs(L)
+    assert [p["ids"] for p in pars] == [[1, 2, 3]]
+    assert prose.classify(pars, lambda b: False)[0]["kind"] == "prose"
+    assert prose.join(["строительно-мон-", "тажных работ"]) == "строительно-монтажных работ"
+
+
+def test_extension_table_rows_keep_row_numbers_and_rules():
+    """A ruled table: one entry per row (row number + cells in column order), the row rules are
+    continued into the column."""
+    from engine import extend
+    doc = pymupdf.open()
+    page = doc.new_page(width=595, height=842)
+    xs, ys = [70, 100, 300, 500], [100, 130, 160]
+    for y in ys:
+        page.draw_line((xs[0], y), (xs[-1], y))
+    for x in xs:
+        page.draw_line((x, ys[0]), (x, ys[-1]))
+    page.insert_text((75, 120), "№", fontname="china-s", fontsize=10)
+    page.insert_text((105, 120), "Наименование", fontname="china-s", fontsize=10)
+    page.insert_text((305, 120), "Назначение", fontname="china-s", fontsize=10)
+    page.insert_text((80, 150), "7", fontname="china-s", fontsize=10)
+    page.draw_line((400, 100), (400, 160)); page.insert_text((405, 150), "ГОСТ 12.4.253-2013", fontname="china-s", fontsize=10)
+    page.insert_text((105, 150), "Защитные очки", fontname="china-s", fontsize=10)
+    page.insert_text((305, 150), "Защита глаз", fontname="china-s", fontsize=10)
+    zh = {"Наименование": "名称", "Назначение": "用途", "Защитные очки": "防护眼镜", "Защита глаз": "眼部防护"}
+    class FakeTM:
+        def translate(self, text, ctx="body"):
+            return zh.get(text, ""), text
+    entries, legend, st = extend.collect(page, FakeTM(), [pymupdf.Rect()])
+    rows = [(round(e["y"]), e["zh"], round(e["bot"])) for e in entries if e.get("bot")]
+    assert rows == [(100, "№ | 名称 | 用途", 130), (130, "7. 防护眼镜 | 眼部防护 | ГОСТ 12.4.253-2013", 160)]
+    assert st["rules"] == [100.0, 130.0, 160.0]
