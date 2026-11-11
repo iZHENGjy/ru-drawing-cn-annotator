@@ -42,7 +42,7 @@ def _breaks(par, ln):
     right = max([l["box"][2] for l in par] + [ln["box"][2]])
     width = right - min(x0s)
     short = prev["box"][2] < right - 0.15 * width
-    indent = ln["box"][0] - par[0]["box"][0] > 0.6 * (ln["box"][3] - ln["box"][1]) * 2 if len(par) > 1 else False
+    indent = ln["box"][0] - min(l["box"][0] for l in par) > 1.2 * (ln["box"][3] - ln["box"][1])
     if SENT_END.search(pt):
         return short or indent
     return prev["box"][2] < right - 0.25 * width and t[:1].isupper()

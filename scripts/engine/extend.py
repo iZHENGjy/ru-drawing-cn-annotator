@@ -142,7 +142,7 @@ def _breaks(p, f):
     right = max(p["rect"].x1, f["rect"].x1)
     width = right - min(p["rect"].x0, f["rect"].x0)
     short = prev["rect"].x1 < right - 0.15 * width          # the previous line ends early
-    indent = f["rect"].x0 - p["lines"][0]["rect"].x0 > 8 if len(p["lines"]) > 1 else f["rect"].x0 - p["rect"].x0 > 8
+    indent = f["rect"].x0 - min(l["rect"].x0 for l in p["lines"]) > 8
     if SENT_END.search(pt):
         return short or indent                             # a sentence ending inside a justified line continues
     # an upper-case start after a short line without punctuation: heading, then new paragraph
@@ -188,15 +188,28 @@ def collect(page, tm, tb):
                 legend.append((text, zh))
         else:
             body.append((p, zh))
-    # one entry per table row: paragraphs that start on the same line in different cells
+    # one entry per table row: the cells between the same two horizontal rules (or, outside a
+    # table, paragraphs that start on the same line), joined in reading order
+    def row_of(r):
+        up = [y for xa, xb, y in hs if y <= r.y0 + 1 and min(xb, r.x1) - max(xa, r.x0) > 2]
+        dn = [y for xa, xb, y in hs if y >= r.y1 - 1 and min(xb, r.x1) - max(xa, r.x0) > 2]
+        if not (up and dn) or min(dn) - max(up) > 8 * max(r.height / max(1, round(r.height / 12)), 6):
+            return None                                     # not a table row (e.g. text between table and title block)
+        return (round(max(up), 1), round(min(dn), 1))
     body.sort(key=lambda t: (t[0]["rect"].y0, t[0]["rect"].x0))
-    entries = []
+    groups = []
     for p, zh in body:
-        if entries and abs(p["rect"].y0 - entries[-1][0]) < 0.6 * p["size"] and p["rect"].x0 > entries[-1][2]:
-            y, z, _ = entries[-1]
-            entries[-1] = (y, z + " ｜ " + zh, p["rect"].x1)
+        key = row_of(p["rect"])
+        g = next((g for g in groups if key is not None and g["key"] == key), None)
+        if g is None and key is None and groups and groups[-1]["key"] is None                 and abs(p["rect"].y0 - groups[-1]["y"]) < 0.6 * p["size"] and p["rect"].x0 > groups[-1]["x1"]:
+            g = groups[-1]
+        if g is None:
+            groups.append(dict(key=key, y=p["rect"].y0, x1=p["rect"].x1, cells=[(p["rect"].x0, p["rect"].y0, zh)]))
         else:
-            entries.append((p["rect"].y0, zh, p["rect"].x1))
+            g["cells"].append((p["rect"].x0, p["rect"].y0, zh)); g["y"] = min(g["y"], p["rect"].y0)
+            g["x1"] = max(g["x1"], p["rect"].x1)
+    entries = [(g["y"], " ｜ ".join(z for _, _, z in sorted(g["cells"], key=lambda c: (c[0], c[1]))), 0)
+               for g in sorted(groups, key=lambda g: g["y"])]
     return [(y, z) for y, z, _ in entries], legend, dict(paras=len(body) + len(legend), missing=missing)
 
 

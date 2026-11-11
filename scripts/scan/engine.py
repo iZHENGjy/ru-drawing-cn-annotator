@@ -998,6 +998,19 @@ def annotate(doc, pg, mapping, trans, report):
         lsL = wrap(legend_side, fsL, extra_w - 30)
         yy = PH - 20 - len(lsL) * fsL * 1.3
         yy = max(yy, max([d[2] + d[4] * 1.3 for d in draws if d[0] == "txt"] + [0]) + 10)
+        hL = len(lsL) * fsL * 1.3
+        if std2 and yy + hL > PH - 16:      # would run off the page: lowest free gap of the column instead
+            taken = sorted((d[2], d[2] + d[4] * 1.3) for d in draws if d[0] == "txt")
+            gaps, top = [], 16.0
+            for a, b in taken:
+                if a - top >= hL + 8:
+                    gaps.append((top + 4, a - 4))
+                top = max(top, b)
+            if PH - 16 - top >= hL + 8:
+                gaps.append((top + 4, PH - 16))
+            if gaps:
+                g0, g1 = gaps[-1]
+                yy = g1 - hL
         for t in lsL:
             draws.append(("txt", PW + 14, yy, t, fsL)); yy += fsL * 1.3
 
