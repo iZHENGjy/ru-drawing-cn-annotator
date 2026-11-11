@@ -88,8 +88,16 @@ underline, and one legend sentence in the title block explains it.
 | `report` | no | gates, stage table, cost | `work/job/run_summary.json`, `cost_report.md` |
 
 The text-layer route has its own shorter list (`extract`, `build_dry`, `export_todo`, `translate`,
-`merge_tm`, `build`, `issues`, `report`); its `translate` stage is still a stub that reports the todo
-count and merges `review/batch.tsv` when you provide one.
+`merge_tm`, `build`, `issues`, `report`). Its `translate` stage runs `phrase_translate` over
+`review/tm_todo.json` (keys with numbers as `⟨n⟩`, one per paragraph or label) and writes only validated
+answers to `review/batch.tsv`, which `merge_tm` merges into the TM.
+
+**Prose documents (ППР, ПЗ, specifications as running text).** Dense paragraphs leave no room for
+Chinese beside the Russian. List those pages in `[project] notes_pages` (e.g. `"5-30,41-60"`): the
+Russian text stream of each page is then translated paragraph by paragraph (split at the first-line
+indent) and set on a Chinese page inserted right after the original, which stays untouched. A mixed
+volume (text pages plus scanned drawings) runs the text route with `--pages` on the text pages and the
+scan route on the image pages; the two outputs are then interleaved in page order.
 
 ## The four LLM tasks
 

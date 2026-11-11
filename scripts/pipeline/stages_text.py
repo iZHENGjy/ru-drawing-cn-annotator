@@ -1,8 +1,8 @@
-"""Text-layer route stages: extract -> build_dry -> export_todo -> translate[stub] -> merge_tm -> build -> issues -> report.
+"""Text-layer route stages: extract -> build_dry -> export_todo -> translate -> merge_tm -> build -> issues -> report.
 
-All steps are the existing scripts (01_extract, 20_build, 41_export_todo, 40_merge_tm, 43_issues) run in a
-subprocess.  The LLM translate step is a STUB (TODO): it only reports how many keys are waiting in
-review/todo_all.txt; a human or an external LLM fills <review>/batch.tsv (name configurable: [job] batch).
+The local steps are the existing scripts (01_extract, 20_build, 41_export_todo, 40_merge_tm, 43_issues) run in a
+subprocess.  translate runs the LLM task phrase_translate over <review>/tm_todo.json (keys with numbers as ⟨n⟩)
+and writes the validated answers to <review>/batch.tsv ([job] batch), which merge_tm merges into the TM.
 """
 from __future__ import annotations
 import json
@@ -63,13 +63,66 @@ def run_export_todo(sc: StageCtx):
     return {"todo_items": n}
 
 
+def _guard(key: str) -> str:
+    """Start of the key for the batch.tsv guard column (no tabs, stops before the first placeholder)."""
+    return key.replace("\t", " ").split("⟨")[0][:24]
+
+
 def run_translate(sc: StageCtx):
-    """STUB (TODO): wire an LLM phrase_translate over review/tm_todo.json -> batch.tsv."""
-    n = sc.job.metrics("export_todo").get("todo_items", 0)
+    """phrase_translate over review/tm_todo.json -> batch.tsv (validated; merged by the merge_tm stage).
+
+    The keys already carry numbers as ⟨n⟩.  Only answers that pass TM.check_entry are written, so
+    40_merge_tm.py never rejects the batch; a re-run replays finished calls from the cache for free."""
+    todo_f = _review(sc.job) / "tm_todo.json"
     b = _batch(sc.job)
-    sc.log(f"TODO: text route has no LLM translate stage yet; {n} key(s) in todo_all.txt; batch file: {b} "
-           f"({'present' if b.exists() else 'absent'})")
-    return {"todo_items": n, "batch_present": b.exists(), "stub": True}
+    todo = json.loads(todo_f.read_text(encoding="utf-8")) if todo_f.exists() else {}
+    if not todo:
+        b.parent.mkdir(parents=True, exist_ok=True)
+        b.write_text("", encoding="utf-8")
+        return {"todo_items": 0, "calls": 0}
+    from engine.tm import TM
+    from .core import summarize_results, lazy
+    keys = list(todo)
+    items = [{"id": str(i), "key": k, "sample": (v or {}).get("ru", k) if isinstance(v, dict) else k,
+              "n": len((v or {}).get("pages") or [1]) if isinstance(v, dict) else 1} for i, (k, v) in enumerate(todo.items())]
+    size = int(sc.cfg.job.get("batch_size", 60))
+    payloads, ids = [], []
+    for i in range(0, len(items), size):
+        payloads.append({"data": {"items": items[i:i + size], "terms": []}, "images": []})
+        ids.append(f"tx{i // size + 1:03d}")
+    sess = sc.session()
+    results = sess.run("phrase_translate", payloads, ids)
+    vmod = lazy("llm.validate", "translate")
+    answers = {}
+    for r in results:
+        out = r.output if isinstance(r.output, dict) else None
+        if out is None:
+            continue
+        bad = set() if r.ok else (vmod.bad_ids(r.errors) or {a.get("id") for a in out.get("items") or []})
+        for a in out.get("items") or []:
+            if str(a.get("id")) not in bad:
+                answers[str(a.get("id"))] = a
+    rows, rejected = [], []
+    for i, k in enumerate(keys):
+        a = answers.get(str(i))
+        if a is None:
+            continue
+        zh = (a.get("zh") or "").strip() if a.get("action", "translate") == "translate" else ""
+        e = TM.check_entry(k, zh) if zh else None
+        if e:
+            rejected.append(f"{i}: {e}")
+            continue
+        rows.append(f"{i}\t{_guard(k)}\t{zh.replace(chr(9), ' ').replace(chr(10), ' ') or '∅'}")
+    b.parent.mkdir(parents=True, exist_ok=True)
+    b.write_text("\n".join(rows) + ("\n" if rows else ""), encoding="utf-8")
+    for e in rejected[:20]:
+        sc.log("rejected: " + e)
+    left = len(keys) - len(rows)
+    m = {"todo_items": len(keys), "answered": len(rows), "unresolved": left, **summarize_results(results)}
+    sc.log(f"translate: {m}")
+    if left > 0.1 * len(keys):
+        raise StageError(f"{left} of {len(keys)} keys unresolved after retries; re-run translate")
+    return m
 
 
 def run_merge_tm(sc: StageCtx):
@@ -106,7 +159,7 @@ STAGES = [
           inputs=lambda j: [str(_tm(j))], outputs=lambda j: [str(_review(j) / "tm_todo.json")]),
     Stage("export_todo", "local", run_export_todo, "numbered todo packet (41_export_todo.py)", deps=("build_dry",),
           outputs=lambda j: [str(_review(j) / "todo_all.txt")]),
-    Stage("translate", "llm", run_translate, "[STUB/TODO] LLM translation of todo_all.txt -> batch.tsv",
+    Stage("translate", "llm", run_translate, "LLM phrase_translate of tm_todo.json -> batch.tsv",
           deps=("export_todo",), always=True, outputs=lambda j: [str(_batch(j))]),
     Stage("merge_tm", "tm", run_merge_tm, "validated merge into the project TM (40_merge_tm.py)", deps=("translate",),
           inputs=lambda j: [str(_batch(j))], outputs=lambda j: [str(_tm(j))]),

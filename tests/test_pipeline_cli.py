@@ -297,3 +297,37 @@ def test_shim_dry_run_both_routes(tmp_path):
     r = subprocess.run([sys.executable, str(ROOT / "scripts" / "rudraw.py"), "status",
                         "--config", str(tmp_path / "s" / "project.toml")], capture_output=True, text=True, encoding="utf-8")
     assert r.returncode == 0 and "pending" in r.stdout
+
+
+def test_text_route_translate_writes_validated_batch(tmp_path):
+    """The text route's translate stage runs phrase_translate (fake backend) over tm_todo.json and
+    writes a batch.tsv that merge_tm accepts; afterwards no TM key is missing."""
+    folder = tmp_path / "t"
+    assert cli.main(["init", str(folder), "--pdf", str(DEMO_PDF)]) == 0
+    toml = folder / "project.toml"
+    toml.write_text(toml.read_text(encoding="utf-8").replace('backend = "claude-cli"', 'backend = "fake"'), encoding="utf-8")
+    job = Job(JobConfig.load(toml), out=lambda *_: None)
+    assert runner.run_job(job, until="export_todo", echo=False) == 0
+    todo = {"Бетон класса B⟨1⟩ по ГОСТ ⟨2⟩": {"ru": "Бетон класса B25 по ГОСТ 26633", "pages": [1]},
+            "Схема производства работ": {"ru": "Схема производства работ", "pages": [1, 2]}}
+    (folder / "review" / "tm_todo.json").write_text(json.dumps(todo, ensure_ascii=False), encoding="utf-8")
+    assert runner.run_job(job, only="translate", echo=False) == 0
+    rows = (folder / "review" / "batch.tsv").read_text(encoding="utf-8").splitlines()
+    assert len(rows) == len(todo)
+    for row in rows:
+        i, guard, zh = row.split("	")
+        assert list(todo)[int(i)].startswith(guard) and zh == "∅"      # fake answers 'keep'
+    assert job.metrics("translate")["unresolved"] == 0
+    assert runner.run_job(job, only="merge_tm", echo=False) == 0
+    assert job.metrics("merge_tm")["merged"] == 2
+
+
+def test_split_paragraphs_at_first_line_indent():
+    from engine.pdf_build import split_paragraphs
+    R = pymupdf.Rect
+    items = [(R(90, 0, 500, 10), ["a"], None), (R(70, 12, 500, 22), ["b"], None),
+             (R(90, 24, 500, 34), ["c"], None), (R(70, 36, 300, 46), ["d"], None), (R(72, 48, 300, 58), ["e"], None)]
+    out = split_paragraphs("3", items)
+    assert [n for n, _ in out] == ["3", ""]
+    assert [[it[1][0] for it in its] for _, its in out] == [["a", "b"], ["c", "d", "e"]]
+    assert split_paragraphs("", items[:1]) == [("", items[:1])]
