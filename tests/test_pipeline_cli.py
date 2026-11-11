@@ -331,3 +331,33 @@ def test_split_paragraphs_at_first_line_indent():
     assert [n for n, _ in out] == ["3", ""]
     assert [[it[1][0] for it in its] for _, its in out] == [["a", "b"], ["c", "d", "e"]]
     assert split_paragraphs("", items[:1]) == [("", items[:1])]
+
+
+def test_extension_page_widens_and_keeps_original(tmp_path):
+    """Running-text page: the original stays, the page grows to the right, Chinese only in the new column."""
+    from engine import extend
+    doc = pymupdf.open()
+    page = doc.new_page(width=595, height=842)
+    page.insert_text((80, 100), "Общие требования к производству работ", fontname="china-s", fontsize=11)
+    before = page.get_text()
+    class FakeTM:
+        def translate(self, text, ctx="body"):
+            return "施工作业一般要求", text
+    st = extend.render(page, FakeTM(), [pymupdf.Rect(0, 0, 0, 0)])
+    assert page.rect.width > 595 * 1.5 and page.rect.height == 842
+    assert st["paras"] == 1 and st["missing"] == 0 and st["fs"] >= 8
+    after = page.get_text("words")
+    assert all(w[0] >= 595 for w in after if "施工" in w[4])
+    assert "Общие требования" in page.get_text() and before.strip() in page.get_text()
+
+
+def test_scan_prose_paragraphs_join_lines_of_one_paragraph():
+    from scan import prose
+    L = [dict(id=1, box=(0.12, 0.30, 0.80, 0.32), text="ПАО и Общество с ограниченной ответственностью обсудили"),
+         dict(id=2, box=(0.08, 0.32, 0.80, 0.34), text="график выполнения строительно-монтажных работ и согласовывают"),
+         dict(id=3, box=(0.08, 0.34, 0.50, 0.36), text="его в редакции, приложенной к протоколу."),
+         dict(id=4, box=(0.08, 0.50, 0.20, 0.52), text="Руководитель проекта")]
+    pars = prose.paragraphs(L)
+    assert [p["ids"] for p in pars] == [[1, 2, 3]]
+    assert prose.classify(pars, lambda b: False)[0]["kind"] == "prose"
+    assert prose.join(["строительно-мон-", "тажных работ"]) == "строительно-монтажных работ"

@@ -18,7 +18,7 @@ import csv, json, re, time
 from collections import Counter
 from pathlib import Path
 import pymupdf
-from . import place
+from . import extend, place
 from .config import DEFAULT_TB_ANCHORS
 from .layout import analyse, page_words, to_frame_rect, from_frame_rect, word_lang, Word
 from .place import (Obstacles, Painter, pair_runs, en_slots, extra_slots_below, fit, wrap,
@@ -306,6 +306,17 @@ def build(pdf, pages, out_path, tm: TM, review_dir, notes_mode="inplace", notes_
         runs, words, other, segs = analyse(page)
         tb = title_block(page, words, tb_anchors, left_stamp)
         issues = []
+
+        # ---- running-text page (docs/output_standard.md): extension column on the right
+        if keep_en and pn in notes_pages:
+            st = extend.render(page, tm, tb, dry=dry)
+            rows.append({"page": pn, "units": st["paras"], "ok": st["paras"] - st["missing"],
+                         "missing": st["missing"], "overflow": 0, "callout": 0, "unplaced": 0, "ru_lost": 0,
+                         "en_residual": 0, "overlap": 0, "appendix_clauses": 0,
+                         "issues": [f"缺译 {st['missing']} 段"] if st["missing"] else []})
+            log(f"p{pn}: extend paras={st['paras']} missing={st['missing']} fs={st.get('fs', '-')} "
+                f"col={st.get('width', '-')} grown={st.get('grown', 0)}")
+            continue
 
         # ---- long notes stream (general notes pages)
         notes_units = []

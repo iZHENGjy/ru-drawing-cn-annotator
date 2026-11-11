@@ -368,6 +368,16 @@ def annotate(doc, pg, mapping, trans, report):
                 heads.append((dict(id=None, text="", x0=bb[0], y0=bb[1], x1=bb[2], y1=bb[3]), zh))
             items.append(dict(zh=zh, box=bb, src=bb, id=None, ru=e.get("ru"), low=elow))
 
+    std2 = int(getattr(CTX.cfg, "output_standard", 1) or 1) >= 2
+    prose_col, para_legend = [], []
+    for q in (mapping.get("paras") or []) if std2 else []:
+        b = q["box"]
+        bb = (b[0] * PW, b[1] * PH, b[2] * PW, b[3] * PH)
+        if q.get("kind") == "tb":
+            para_legend.append((q.get("ru") or "", clean(q["zh"]))); cov["legend"].append(bb)
+        else:
+            prose_col.append((bb[1], clean(q["zh"]))); cov["notes"].append(bb)
+
     # Raster approval stamp ([scan] stamp_image_size + stamp_zh): its lines are merged into one
     # Chinese line placed just above the stamp.
     stamp = None
@@ -484,7 +494,7 @@ def annotate(doc, pg, mapping, trans, report):
         TBW = r"修改|处数|文件号|签字|日期|图幅|替换|新增|编制|校核|批准|审查|负责人|主任|存档号|阶段|总页数|页次|^页$|会签|版权"
         if in_tb(it["box"]) or (vertical and it.get("id") is None) or (len(zh) <= 24 and re.search(TBW, zh)):   # 图签/侧栏小字:绝对上限
             h = min(h, (8.5 if big else 5.8) / FS_K)
-        fmin = 4.5 if big else 3.2
+        fmin = (6.0 if big else 4.5) if std2 else (4.5 if big else 3.2)
         fmax = 26 if big else 14
         fs0 = max(fmin, min(h * FS_K, fmax))
         if it.get("tiny"):
@@ -620,6 +630,8 @@ def annotate(doc, pg, mapping, trans, report):
             inline = ("h", fs, [inl_t], (x1 + fs * 0.25, yc, x1 + fs * 0.25 + iw, yc + fs * 1.18))
             above = ("h", fs, ls, (xl, y0 - g - hh, xl + w, y0 - g))
             order = ([inline] + belows + [above]) if (short or it.get("tiny")) else (belows + [inline, above])
+            if std2:                     # never above the Russian (docs/output_standard.md)
+                order = [c for c in order if c is not above]
             cands += order
         for c in cands:
             if tb and not inside_tb(c[3]):
@@ -652,7 +664,7 @@ def annotate(doc, pg, mapping, trans, report):
                 g = fs * 0.15
                 for bb in ((x1 + g, (y0 + y1) / 2 - fs * 0.6, x1 + g + sw("/" + zh, fs), (y0 + y1) / 2 + fs * 0.6),
                            (x0, y1 + g, x0 + sw(zh, fs), y1 + g + fs * 1.18),
-                           (x0, y0 - g - fs * 1.18, x0 + sw(zh, fs), y0 - g)):
+                           (x0, y0 - g - fs * 1.18, x0 + sw(zh, fs), y0 - g))[:2 if std2 else 3]:
                     pl.allow_out = True    # 贴近图框边的小标注:允许越出内框检测
                     okk = pl.ok(bb, ign=it["src"], lines_ok=True)
                     pl.allow_out = False
@@ -672,7 +684,7 @@ def annotate(doc, pg, mapping, trans, report):
                 bb = (xx0, yy0, xx0 + w, yy0 + hh)
                 dx = max(bb[0] - x1, x0 - bb[2], 0); dy = max(bb[1] - y1, y0 - bb[3], 0)
                 dist = (dx * dx + dy * dy) ** 0.5
-                if dist > Rr or (best and dist >= best[0]):
+                if dist > Rr or (best and dist >= best[0]) or (std2 and bb[3] <= y0):
                     continue
                 if pl.ok(bb, ign=it["src"]):
                     best = (dist, bb)
@@ -684,7 +696,7 @@ def annotate(doc, pg, mapping, trans, report):
                     bb = (xx0, yy0, xx0 + w, yy0 + hh)
                     dx = max(bb[0] - x1, x0 - bb[2], 0); dy = max(bb[1] - y1, y0 - bb[3], 0)
                     dist = (dx * dx + dy * dy) ** 0.5
-                    if dist > Rr2 or (best and dist >= best[0]):
+                    if dist > Rr2 or (best and dist >= best[0]) or (std2 and bb[3] <= y0):
                         continue
                     if pl.ok(bb, ign=it["src"]):
                         best = (dist, bb)
@@ -706,6 +718,27 @@ def annotate(doc, pg, mapping, trans, report):
              "修改/处数/页/文件号/签字": "Изм./Кол.уч./Лист/№ док./Подп.", "修改/修改处数/页/文件号/签字": "Изм./Кол.уч./Лист/№ док./Подп.",
              "批准用于施工": "Утверждено для строительства", "准予施工": "В производство работ",
              "版权声明": "左侧竖排声明", "设计阶段:施工图(P/DD)": "Стадия Р"}
+    tbz = None
+    if std2:      # title-block zone: tbbox, else the area of the recognised standard fields (Разраб., Стадия ...)
+        cb = [it["box"] for it in items if CANON.get(re.sub(r"\s+", "", it["zh"].strip(" /")))
+              and (it["box"][1] + it["box"][3]) / 2 > PH * 0.7 and (it["box"][0] + it["box"][2]) / 2 > PW * 0.4]
+        tbz = tbbox or ((min(b[0] for b in cb) - 10, min(b[1] for b in cb) - PH * 0.04, PW, PH) if len(cb) >= 3 else None)
+    def in_tbz(bb):
+        cx, cy = (bb[0] + bb[2]) / 2, (bb[1] + bb[3]) / 2
+        return bool(tbz) and tbz[0] <= cx <= tbz[2] and tbz[1] <= cy <= tbz[3]
+    whole = []    # title-block texts page_notes read whole from the image: they replace OCR fragments
+    if std2 and tbz and trans:
+        if trans.get("title_ru") and trans.get("title_zh"):
+            whole.append((trans["title_ru"], clean(trans["title_zh"])))
+        for b in trans.get("blocks") or []:
+            if b.get("kind") == "pairs":
+                whole += [(i.get("ru") or "", clean(i.get("zh"))) for i in b.get("items") or [] if i.get("zh")]
+    whole_words = set(w.lower() for ru, _ in whole for w in re.findall(r"[А-Яа-яЁё]{3,}", ru))
+    def covered_whole(ru):
+        ws = [w.lower() for w in re.findall(r"[А-Яа-яЁё]{3,}", ru or "")]
+        import difflib
+        hit = sum(w in whole_words or bool(difflib.get_close_matches(w, whole_words, 1, 0.75)) for w in ws)
+        return bool(ws) and hit / len(ws) >= 0.6
     keep = []
     for it in items:
         z = re.sub(r"\s+", "", it["zh"].strip(" /"))
@@ -725,6 +758,13 @@ def annotate(doc, pg, mapping, trans, report):
             zone, key = True, "Листов"
         if zone and (z.startswith("本文件为") or z.startswith("版权声明")):
             key = "左侧竖排声明"
+        side = std2 and cx < PW * 0.09 and (bx[3] - bx[1]) > 2.5 * max(bx[2] - bx[0], 1)   # left margin strip, vertical
+        if std2 and not key and (in_tbz(bx) or side) and not it.get("tiny") and not it.get("stamp"):
+            ru_ = re.sub(r"[|_]+", " ", it.get("ru") or "").strip(" .:;,")
+            if not covered_whole(ru_) and (ru_ or not whole):
+                legend.append((ru_, it["zh"].strip(" /")))
+            cov["legend"].append(bx)
+            continue
         if zone and key and not it.get("tiny") and not it.get("stamp"):
             zz = it["zh"].strip(" /")
             if key == "左侧竖排声明":
@@ -733,6 +773,7 @@ def annotate(doc, pg, mapping, trans, report):
             continue
         keep.append(it)
     items = keep
+    legend += para_legend + whole
 
     # 去重:连续行相同译文只标第一行
     done = []
@@ -756,7 +797,7 @@ def annotate(doc, pg, mapping, trans, report):
         legend.insert(0, ("шт./pcs.", CTX.cfg.count_word + "数"))
         if any(z == "间距" for _, z in toks):
             legend.insert(1, ("ш./sp.", "间距"))
-    if any(d[0] == "lbl" and len(d) > 4 and d[4] for d in draws):   # 有低置信度译文被画出:对照行写明标记含义
+    if any(d[0] == "lbl" and len(d) > 4 and d[4] for d in draws) and (tbbox or not std2):   # 有低置信度译文被画出:对照行写明标记含义
         legend.append(("", LOW_LEGEND))
     if legend:
         seen, ent = set(), []
@@ -926,6 +967,28 @@ def annotate(doc, pg, mapping, trans, report):
                 break
         draws += out
 
+    # 成段文字(output_standard 2):右侧拓展栏,逐段与俄文段落顶部对齐,整句
+    if prose_col:
+        colw = (PW * 0.62) if not big else min(PW * 0.3, 900)
+        extra_w = max(extra_w, colw + 20)
+        X = PW + 14
+        taken = [(d[2], d[2] + d[4] * 1.3) for d in draws if d[0] == "txt"]
+        fsP = 12.0 if big else 9.0
+        for scale in (1.0, 0.94, 0.89):
+            f = fsP * scale; out = []; ycur = 18.0
+            for top, zh in sorted(prose_col):
+                ls = wrap(zh, f, colw - 10); hh = len(ls) * f * 1.3
+                ycur = max(ycur, top)
+                while any(a < ycur + hh and ycur < b for a, b in taken):
+                    ycur = max(b for a, b in taken if a < ycur + hh and ycur < b) + f * 0.3
+                for t in ls:
+                    out.append(("txt", X, ycur, t, f)); ycur += f * 1.3
+                ycur += f * 0.35
+            if ycur < PH - 12:
+                break
+        draws += out
+        report.append((doc, pg, "加宽", "成段文字"))
+
     # 图签对照行在图面放不下 → 放到右侧加宽栏底部(没有加宽栏就新开一栏)
     if legend_side:
         fsL = 9 if big else 6.5
@@ -985,7 +1048,8 @@ def annotate(doc, pg, mapping, trans, report):
         c.setLineWidth(0.6)
         c.line(PW + 4, 10, PW + 4, PH - 10)
         c.setFont(FONT, 9 if big else 6.5)
-        c.drawString(PW + 14, 8, "← 左侧俄文说明条文的中文对照(逐条对齐)" if widen_items else "← 左侧图签栏目的中文对照")
+        c.drawString(PW + 14, 8, "← 左侧俄文段落的中文对照(逐段对齐)" if prose_col else
+                     "← 左侧俄文说明条文的中文对照(逐条对齐)" if widen_items else "← 左侧图签栏目的中文对照")
     c.save(); buf.seek(0)
     ov = PdfReader(buf).pages[0]
     if extra_w:

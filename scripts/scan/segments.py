@@ -407,7 +407,19 @@ def collect(ctx, pages=None, fuzzy: bool = True, write: bool = True, skip_notes:
         tl = [dict(box=d["box"], text=d["text"]) for d in P.lines]
         rl = [dict(box=r["box"], text=r["text"]) for r in P.rapid]
         nboxes = [r["box"] for r in K.notes_regions(P, K.title_block(P, getattr(ctx.cfg, "title_code_regex", "")))]             if skip_notes and P.W else []
+        members = set()
+        if getattr(ctx.cfg, "output_standard", 1) >= 2:      # paragraphs are translated whole
+            from scan import prose
+            tbb = K.title_block(P, getattr(ctx.cfg, "title_code_regex", ""))
+            pars = prose.classify(prose.paragraphs(P.lines),
+                                  lambda b: bool(tbb) and tbb[0] <= (b[0] + b[2]) / 2 <= tbb[2] and tbb[1] <= (b[1] + b[3]) / 2 <= tbb[3])
+            pars = [q for q in pars if not any(ov(q["box"], nb) >= 0.6 for nb in nboxes)]
+            for q in pars:
+                members |= set(q["ids"])
+                items.append(("para", "P" + "-".join(map(str, q["ids"])), q["box"], q["ru"], True))
         for src, iid, box, text, need in items:
+            if src == "tess" and iid in members:
+                need = False
             if count_only(text):
                 continue
             if need and any(ov(box, nb) >= 0.6 for nb in nboxes):
@@ -416,6 +428,9 @@ def collect(ctx, pages=None, fuzzy: bool = True, write: bool = True, skip_notes:
                 n_tess += 1
                 txt, ok = reconcile(text, rapid_over(P, box))
                 above, below = neighbours(tl, next(x for x in tl if x["box"] == box))
+            elif src == "para":
+                txt, ok = reconcile(text, rapid_over(P, box))
+                above, below = "", ""
             else:
                 n_rapid += 1; n_rapid_need += need
                 txt, ok = norm(text), []

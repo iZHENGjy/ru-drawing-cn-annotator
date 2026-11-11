@@ -325,7 +325,24 @@ def map_page(ctx, pg: int, tm, notes_res: dict | None = None, known: set | None 
             z2, nf, nu = fix_marks(e["zh"], known)
             if nf:
                 e["zh"] = z2; xm.update(conf="low", why=(xm.get("why", "") + "; member mark corrected").strip("; "))
+    paras = []
+    if getattr(ctx.cfg, "output_standard", 1) >= 2:          # paragraphs translated whole (scan/prose.py)
+        from scan import prose
+        for q in prose.classify(prose.paragraphs(P.lines, skip=notes_lines), lambda b: in_tb(b, tb)):
+            txt, ok = S.reconcile(q["ru"], S.rapid_over(P, q["box"]))
+            key, nums, _, _ = S.make_key(txt)
+            hit = tm.lookup(key, "tb" if q["kind"] == "tb" else "body")
+            zh, dropped = render(hit, nums, ok, hit.key if hit.fuzzy else key) if hit else ("", 0)
+            if not zh or not CJK.search(zh):
+                continue                                      # no whole translation: keep the lines as they are
+            for i in q["ids"]:
+                lines[str(i)] = ""
+                meta[str(i)] = dict(conf="high", src="paragraph", why=f"paragraph {q['ids'][0]}")
+            paras.append(dict(ids=q["ids"], box=[round(v, 4) for v in q["box"]], ru=q["ru"], zh=zh, kind=q["kind"],
+                              low=bool(hit.fuzzy or hit.conf == "low" or dropped)))
     m = {"lines": lines, "extra": extra, "appendix": bool(used)}
+    if paras:
+        m["paras"] = paras
     low_l = [k for k, v in meta.items() if v["conf"] == "low"]
     meta_j = {"lines": meta, "extra": xmeta, "low_lines": low_l,
               "low_extra": [i for i, v in enumerate(xmeta) if v["conf"] == "low"],
