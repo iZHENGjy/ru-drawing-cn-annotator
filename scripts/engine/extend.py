@@ -162,17 +162,30 @@ def _join(lines):
     return re.sub(r"\s+", " ", out).strip()
 
 
+TB_WORDS = {"изм", "лист", "№", "документа", "док", "подпись", "подп", "дата", "кол", "уч", "колуч", "листов", "n"}
+RULE_COLOR = (0.62, 0.72, 0.95)
+
+
+def _tb_fields_only(text):
+    """a line of sheet-frame field names only (Изм. Лист № документа Подпись Дата)"""
+    ws = [w for w in re.split(r"[\s.]+", text.lower()) if w and not re.search(r"\d", w)]
+    return bool(ws) and all(w in TB_WORDS for w in ws)
+
+
 def collect(page, tm, tb):
-    """-> (entries [(y, zh)], legend [(ru, zh)], stats).  Records missing keys in ``tm``."""
+    """-> (entries, legend, stats).  entries: {y, zh, bot (table row: its lower rule) or None};
+    stats["rules"]: the table rules to continue into the column.  Records missing keys in ``tm``."""
     hs, vs = _rules(page)
-    paras = paragraphs(fragments(page, vs), hs, vs)
+    frs = fragments(page, vs)
+    paras = paragraphs(frs, hs, vs)
     body, legend, missing = [], [], 0
     for p in paras:
         if len(CYR.findall(p["text"])) < 2:
             continue
         c = (p["rect"].tl + p["rect"].br) / 2
         stamp = tb[0] if tb else pymupdf.Rect()             # left margin strip: only text set inside it
-        in_tb = any(c in t for t in tb[1:]) or (p["rect"].x1 <= stamp.x1 and p["lines"][0]["vert"])
+        in_tb = any(c in t for t in tb[1:]) or (p["rect"].x1 <= stamp.x1 and p["lines"][0]["vert"]) \
+            or (c.y > page.rect.height * 0.85 and _tb_fields_only(p["text"]))
         text = p["text"]
         if in_tb:                                          # sheet code / page number are not field names
             text = " ".join(t for t in text.split() if not re.search(r"\d", t)).strip()
@@ -188,78 +201,132 @@ def collect(page, tm, tb):
                 legend.append((text, zh))
         else:
             body.append((p, zh))
-    # one entry per table row: the cells between the same two horizontal rules (or, outside a
-    # table, paragraphs that start on the same line), joined in reading order
-    def row_of(r):
-        up = [y for xa, xb, y in hs if y <= r.y0 + 1 and min(xb, r.x1) - max(xa, r.x0) > 2]
-        dn = [y for xa, xb, y in hs if y >= r.y1 - 1 and min(xb, r.x1) - max(xa, r.x0) > 2]
-        if not (up and dn) or min(dn) - max(up) > 8 * max(r.height / max(1, round(r.height / 12)), 6):
+
+    # table rows: the cells between the same two horizontal rules (rule positions clustered, so
+    # that the cells of one row agree on them even if the rules are drawn piece by piece)
+    def snap(vals):
+        out = {}
+        for v in sorted(vals):
+            out[v] = out[prev] if out and v - prev < 2.0 else v
+            prev = v
+        return out
+    hsnap = snap({y for _, _, y in hs})
+    def row_of(r, size):
+        up = [hsnap[y] for xa, xb, y in hs if y <= r.y0 + 2.5 and min(xb, r.x1) - max(xa, r.x0) > 2]
+        dn = [hsnap[y] for xa, xb, y in hs if y >= r.y1 - 2.5 and min(xb, r.x1) - max(xa, r.x0) > 2]
+        if not (up and dn) or min(dn) - max(up) > 9 * max(size, 6):
             return None                                     # not a table row (e.g. text between table and title block)
         return (round(max(up), 1), round(min(dn), 1))
     body.sort(key=lambda t: (t[0]["rect"].y0, t[0]["rect"].x0))
-    groups = []
+    rows, plain = {}, []
     for p, zh in body:
-        key = row_of(p["rect"])
-        g = next((g for g in groups if key is not None and g["key"] == key), None)
-        if g is None and key is None and groups and groups[-1]["key"] is None                 and abs(p["rect"].y0 - groups[-1]["y"]) < 0.6 * p["size"] and p["rect"].x0 > groups[-1]["x1"]:
-            g = groups[-1]
-        if g is None:
-            groups.append(dict(key=key, y=p["rect"].y0, x1=p["rect"].x1, cells=[(p["rect"].x0, p["rect"].y0, zh)]))
+        key = row_of(p["rect"], p["size"])
+        if key is None:
+            plain.append(dict(y=p["rect"].y0, zh=zh, x0=p["rect"].x0, x1=p["rect"].x1, size=p["size"]))
         else:
-            g["cells"].append((p["rect"].x0, p["rect"].y0, zh)); g["y"] = min(g["y"], p["rect"].y0)
-            g["x1"] = max(g["x1"], p["rect"].x1)
-    entries = [(g["y"], " ｜ ".join(z for _, _, z in sorted(g["cells"], key=lambda c: (c[0], c[1]))), 0)
-               for g in sorted(groups, key=lambda g: g["y"])]
-    return [(y, z) for y, z, _ in entries], legend, dict(paras=len(body) + len(legend), missing=missing)
+            rows.setdefault(key, []).append((p, zh))
+    entries, rules = [], set()
+    frame = 0.6 * page.rect.height                          # the sheet frame is not a table rule
+    for (top, bot), cells in list(rows.items()):
+        x0 = min(p["rect"].x0 for p, _ in cells)
+        vx = sorted(set(snap({x for x, ya, yb in vs if yb - ya < frame
+                              and min(yb, bot) - max(ya, top) > 0.6 * (bot - top)}).values()))
+        if len(vx) < 2:                                     # no cell walls: text between tables, not a row
+            for p, zh in cells:
+                plain.append(dict(y=p["rect"].y0, zh=zh, x0=p["rect"].x0, x1=p["rect"].x1, size=p["size"]))
+            continue
+        def col(r):
+            return sum(1 for x in vx if x < (r.x0 + r.x1) / 2)
+        bycol = {}
+        for p, zh in sorted(cells, key=lambda t: (col(t[0]["rect"]), t[0]["rect"].y0)):
+            bycol.setdefault(col(p["rect"]), []).append(zh)
+        # the row number: a number alone in the first column of this row
+        num = next((f["text"].strip().rstrip(".") for f in frs
+                    if not f["vert"] and f["rect"].y0 >= top - 2.5 and f["rect"].y1 <= bot + 2.5 and f["rect"].x1 <= x0 + 1
+                    and re.fullmatch(r"\d{1,3}\.?", f["text"].strip())), None)
+        zh = " | ".join(" ".join(z) for _, z in sorted(bycol.items()))
+        entries.append(dict(y=top, zh=(f"{num}. " if num else "") + zh, bot=bot))
+        rules |= {top, bot}
+    # paragraphs outside tables: those that start on the same line are one entry
+    plain.sort(key=lambda e: (e["y"], e["x0"]))
+    last = None
+    for e in plain:
+        if last is not None and abs(e["y"] - last["y"]) < 0.6 * e["size"] and e["x0"] > last["x1"]:
+            last["zh"] += " | " + e["zh"]; last["x1"] = e["x1"]
+        else:
+            last = dict(y=e["y"], zh=e["zh"], bot=None, x1=e["x1"])
+            entries.append(last)
+    entries.sort(key=lambda e: e["y"])
+    return entries, legend, dict(paras=len(body) + len(legend), missing=missing, rules=sorted(rules))
 
 
 def layout(entries, legend, PW, PH, fs, colw, align=True):
-    """-> (lines [(y, text)], bottom).  Paragraphs start at their Russian line (align) or follow
-    each other; the legend goes after the last paragraph, at least at the title-block height."""
-    lh = fs * 1.32
-    out, y = [], 18.0
-    for top, zh in entries:
-        ls = wrap(zh, [colw] * 400, fs) or wrap(zh, [colw] * 400, fs, hard=True)
-        y = max(y, top) if align else y
+    """-> (lines [(y, text, fs)], bottom, ok).  A table row sits between its two rules (wrapped,
+    the size reduced to FS_MIN - 1.5 at most); other paragraphs start at their Russian line
+    (align) or follow each other; the legend goes last, at least at the title-block height."""
+    lh = 1.32
+    out, y, ok = [], 18.0, True
+    for e in entries:
+        if e.get("bot") is not None and align:
+            top, bot = e["y"] + 1.5, e["bot"] - 1.0
+            f = fs
+            while True:
+                ls = wrap(e["zh"], [colw] * 60, f) or wrap(e["zh"], [colw] * 60, f, hard=True)
+                if top + len(ls) * f * lh <= bot + 0.5 or f <= FS_MIN - 1.5:
+                    break
+                f -= 0.5
+            if top + len(ls) * f * lh > bot + 0.5 or y > bot:
+                ok = False
+            yy = top
+            for t in ls:
+                out.append((yy, t, f)); yy += f * lh
+            y = max(y, bot + 1.0)
+            continue
+        ls = wrap(e["zh"], [colw] * 400, fs) or wrap(e["zh"], [colw] * 400, fs, hard=True)
+        y = max(y, e["y"]) if align else y
         for t in ls:
-            out.append((y, t)); y += lh
+            out.append((y, t, fs)); y += fs * lh
         y += fs * 0.35
     if legend:
         txt = LEGEND_HEAD + "；".join(f"{ru} = {zh}" for ru, zh in legend)
         ls = wrap(txt, [colw] * 100, fs * 0.9, hard=True)
-        y = max(y + fs * 0.5, PH - 30 - len(ls) * lh)
+        y = max(y + fs * 0.5, PH - 30 - len(ls) * fs * lh)
         for t in ls:
-            out.append((y, t, fs * 0.9)); y += lh
-    return out, y
+            out.append((y, t, fs * 0.9)); y += fs * lh
+    return out, y, ok
 
 
 def render(page, tm, tb, dry=False):
     """Widen ``page`` and set the Chinese column.  Returns stats (paras, missing, fs, width, grown)."""
     entries, legend, st = collect(page, tm, tb)
+    rules = st.pop("rules", [])
     if dry or not (entries or legend):
         return st
     PW, PH = page.rect.width, page.rect.height
     plan = None
     for colw in (PW * 0.62, PW * 0.8, PW * 1.0):
         for fs in (FS, 8.5, FS_MIN):
-            lines, bottom = layout(entries, legend, PW, PH, fs, colw)
-            if bottom <= PH - 12:
+            lines, bottom, ok = layout(entries, legend, PW, PH, fs, colw)
+            if bottom <= PH - 12 and ok:
                 plan = (lines, bottom, fs, colw); break
         if plan:
             break
-    if plan is None:                                       # relax the alignment, then grow downward
+    if plan is None:                                       # keep the table rows if the page still fits
         colw, fs = PW * 1.0, FS_MIN
-        lines, bottom = layout(entries, legend, PW, PH, fs, colw, align=False)
+        lines, bottom, ok = layout(entries, legend, PW, PH, fs, colw)
+        if bottom > PH - 12:                               # relax the alignment, then grow downward
+            lines, bottom, ok = layout(entries, legend, PW, PH, fs, colw, align=False)
+            rules = []
         plan = (lines, bottom, fs, colw)
     lines, bottom, fs, colw = plan
     grow = max(0.0, bottom + 12 - PH)
     mb = page.mediabox
     page.set_mediabox(pymupdf.Rect(mb.x0, mb.y0 - grow, mb.x1 + colw + 28, mb.y1))
-    painter = Painter(page)
     X = PW + 16
-    for item in lines:
-        y, t = item[0], item[1]
-        f = item[2] if len(item) > 2 else fs
+    for y in rules:                                        # the table continues into the column (light rules)
+        page.draw_line((X - 4, y), (X + colw + 4, y), color=RULE_COLOR, width=0.35)
+    painter = Painter(page)
+    for y, t, f in lines:
         painter.line(t, pymupdf.Rect(X, y, X + colw, y + f * 1.25), f, "h")
     painter.flush()
     page.draw_line((PW + 6, 10), (PW + 6, PH + grow - 10), color=place.COLOR, width=0.5)

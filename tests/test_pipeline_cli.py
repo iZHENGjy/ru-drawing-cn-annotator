@@ -361,3 +361,30 @@ def test_scan_prose_paragraphs_join_lines_of_one_paragraph():
     assert [p["ids"] for p in pars] == [[1, 2, 3]]
     assert prose.classify(pars, lambda b: False)[0]["kind"] == "prose"
     assert prose.join(["строительно-мон-", "тажных работ"]) == "строительно-монтажных работ"
+
+
+def test_extension_table_rows_keep_row_numbers_and_rules():
+    """A ruled table: one entry per row (row number + cells in column order), the row rules are
+    continued into the column."""
+    from engine import extend
+    doc = pymupdf.open()
+    page = doc.new_page(width=595, height=842)
+    xs, ys = [70, 100, 300, 500], [100, 130, 160]
+    for y in ys:
+        page.draw_line((xs[0], y), (xs[-1], y))
+    for x in xs:
+        page.draw_line((x, ys[0]), (x, ys[-1]))
+    page.insert_text((75, 120), "№", fontname="china-s", fontsize=10)
+    page.insert_text((105, 120), "Наименование", fontname="china-s", fontsize=10)
+    page.insert_text((305, 120), "Назначение", fontname="china-s", fontsize=10)
+    page.insert_text((80, 150), "7", fontname="china-s", fontsize=10)
+    page.insert_text((105, 150), "Защитные очки", fontname="china-s", fontsize=10)
+    page.insert_text((305, 150), "Защита глаз", fontname="china-s", fontsize=10)
+    zh = {"Наименование": "名称", "Назначение": "用途", "Защитные очки": "防护眼镜", "Защита глаз": "眼部防护"}
+    class FakeTM:
+        def translate(self, text, ctx="body"):
+            return zh.get(text, ""), text
+    entries, legend, st = extend.collect(page, FakeTM(), [pymupdf.Rect()])
+    rows = [(round(e["y"]), e["zh"], round(e["bot"])) for e in entries if e.get("bot")]
+    assert rows == [(100, "名称 | 用途", 130), (130, "7. 防护眼镜 | 眼部防护", 160)]
+    assert st["rules"] == [100.0, 130.0, 160.0]

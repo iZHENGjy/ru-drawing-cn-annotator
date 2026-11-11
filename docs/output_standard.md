@@ -24,8 +24,18 @@ for its notes pages.
 - **Never a new page.** When the column is full, the paragraphs continue downward in their
   order (the column is widened first, then the alignment is relaxed, then the page grows downward).
 - **Contents pages.** Every entry gets its Chinese in the column, aligned to its line.
-- **Tables.** A table row is one column entry, its cells joined by `｜` in reading order, aligned
-  to the row. A cell's text is one paragraph, never broken into its lines.
+- **Tables continue into the column.** Every rule of a table row is drawn on in the column as a
+  light thin line at the same height, so each row's Chinese sits in the same row.
+  - The header is one entry in the original column order (`序号 | 名称 | 类型、型号、ГОСТ | 技术特性 | 用途`),
+    inside the header row.
+  - A data row starts with its row number (`11.`), then its fields in column order separated by
+    ` | `, top-aligned between the row's two rules; long text wraps (and the size is reduced) but
+    never crosses the next rule.
+  - Cells holding only codes, standard numbers or numbers (ГОСТ 7211-86, 2) are not repeated.
+  - A cell's text is one paragraph, never broken into its lines. A table continued from the
+    previous page follows the same rules with its own row numbers.
+  - A row is a band between two horizontal rules crossed by inner cell walls; the sheet frame is
+    not a cell wall.
 
 ## 3. Short labels on drawings
 
