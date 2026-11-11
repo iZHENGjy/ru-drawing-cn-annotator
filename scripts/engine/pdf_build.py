@@ -573,7 +573,12 @@ def build(pdf, pages, out_path, tm: TM, review_dir, notes_mode="inplace", notes_
         if to_list:
             to_list.sort(key=lambda u: (round(u.ru.frect.y0 / 4), u.ru.frect.x0))
             appendix.append(("", "表格及图中文字（俄文 → 中文，按原页从上到下）："))
-            appendix.extend(("", f"{join_ru(u.ru)} → {u.zh}".replace("\n", " ")) for u in to_list)
+            seen = set()
+            for u in to_list:                    # a repeated cell ("По факту") is listed once
+                t = f"{join_ru(u.ru)} → {u.zh}".replace("\n", " ")
+                if t not in seen:
+                    seen.add(t)
+                    appendix.append(("", t))
         if appendix and notes_mode == "appendix" and not keep_en:
             # pointer where the English notes were
             boxes = [b for nu in notes_units for b in nu[3]]
