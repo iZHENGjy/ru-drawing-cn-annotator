@@ -2,8 +2,7 @@
 
 One command takes a PDF to a bilingual Chinese edition: `scripts/rudraw.py` runs the stages,
 keeps resumable state, calls the language model only inside four constrained tasks, tracks the
-cost, and checks the delivery gates. The scripts it drives (`scripts/scan/*.py`, `20_build.py`,
-...) are the ones described in [scanned.md](scanned.md) and the README; you can still run them by hand.
+cost, and checks the delivery gates. The scripts it drives (now modules under `src/drawtrans/`, run as `python -m drawtrans.…`; the old `scripts/…` paths still work) are the ones described in [scanned.md](scanned.md) and the README; you can still run them by hand.
 
 ## Quick start
 
@@ -36,7 +35,7 @@ target_lang = "zh"      # zh en ru ...
 
 `rudraw init <folder> --pdf X.pdf --src en --tgt zh` writes it. The default `ru -> zh` behaves exactly as
 before (same patterns, prompts, fonts, glossaries; the approved layout is byte-identical). Per pair
-(`scripts/i18n.py`):
+(`src/drawtrans/languages/`):
 
 | what | follows |
 |---|---|
@@ -44,7 +43,7 @@ before (same patterns, prompts, fonts, glossaries; the approved layout is byte-i
 | "source text" detection | every pattern written for Cyrillic (`[А-Яа-яЁё]` …) is rewritten for the source alphabet: coverage audit, dedupe, OCR lines |
 | look-alike repair | Latin <-> Cyrillic look-alikes (Tpy6a -> Труба) only for Cyrillic sources |
 | font, line breaking | CJK font + jieba words for a Chinese target; Arial/DejaVu + breaks at spaces otherwise |
-| prompts | `scripts/llm/tasks/<task>.md` for ru-zh (unchanged), `<task>.<src>-<tgt>.md` if present, else `<task>.generic.md` with the language names filled in |
+| prompts | `src/drawtrans/llm/tasks/<task>.md` for ru-zh (unchanged), `<task>.<src>-<tgt>.md` if present, else `<task>.generic.md` with the language names filled in |
 | glossaries | `glossary/<src>-<tgt>/` (`ru-zh` holds the former `glossary/*.json`; old paths still work) |
 | title block | ГОСТ 21.101 field names for ru/kk; ISO 7200 words for en; GB/T words for zh |
 | guards | placeholders `⟨n⟩` are language-independent; standard designations per source (ГОСТ/СП…, BS/EN/ISO/ASTM…, GB/JGJ…); member marks: ГОСТ marks for ru, `[guard] mark_regex` for any language |
@@ -150,7 +149,7 @@ scan route on the image pages; the two outputs are then interleaved in page orde
 The model never sees a whole sheet and never writes the map. Each task has a fixed input packet, a
 JSON Schema, a code validator, up to two retries (the validator errors are appended to the prompt),
 a replay cache and a cost-ledger row. An answer that fails validation is neither used nor cached.
-Prompts live in `scripts/llm/tasks/*.md`.
+Prompts live in `src/drawtrans/llm/tasks/*.md`.
 
 | task | input packet | answer (schema) |
 |---|---|---|

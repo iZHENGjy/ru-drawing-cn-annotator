@@ -3,7 +3,7 @@
     python scripts/qa/standard.py OUT.placements.json [--json result.json]   # exit 1 = not deliverable
 
 Input is the placement record the engines write next to the output PDF (``*.placements.json``,
-see ``scripts/placelog.py``).  Rules (only records made under the standard count, i.e. ``std >= 2``;
+see ``drawtrans.render.placelog``).  Rules (only records made under the standard count, i.e. ``std >= 2``;
 records of the approved legacy layout (``std = 1``) are listed as advisory):
 
   above            a label is set above its source text (it must be below, or beside with a leader)

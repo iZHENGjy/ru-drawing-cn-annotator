@@ -70,7 +70,7 @@ The output format is unchanged, so `20_build.py`, the audit and the gates work a
 `prompt_map.md` step is now the fallback: use it for a page the automatic route cannot handle, or
 edit `map/pNN.fix.json`.
 
-## What the engine does on a scan (`scan/engine.py`)
+## What the engine does on a scan (`layout/scan_place.py`)
 
 - **Ink and line masks** at 72 dpi: text ink (without long rules) and horizontal/vertical
   rules (1 px tolerant to scan skew).  Chinese never covers ink; it may not cross a table

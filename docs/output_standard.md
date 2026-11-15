@@ -62,7 +62,7 @@ approved layout byte for byte. `rudraw init` writes `output_standard = 2` for ne
 
 ## 6. Checked by code
 
-`scripts/qa/standard.py` checks the rules above on the placement record every build writes next to
+`drawtrans.qa.standard` checks the rules above on the placement record every build writes next to
 the output PDF (`*.placements.json`; the PDF itself is not touched). A violation makes the run
 **not deliverable** (`rudraw run` gate `output_standard`, exit code 2):
 
@@ -88,6 +88,6 @@ and the legend words (`图签译文：` / `Title block:` …) follow the target 
 
 | rule | text-layer route | scan route |
 |---|---|---|
-| extension column, paragraphs, contents, tables | `engine/extend.py` (pages in `[project] notes_pages`) | `scan/prose.py` paragraphs, `scan/engine.py` widened column (`output_standard = 2`) |
-| labels below the Russian | `engine/place.py` | `scan/engine.py` (never above with `output_standard = 2`) |
-| `图签译文` line | `engine/extend.py` | `scan/engine.py` legend (title-block texts read whole by `page_notes` replace OCR fragments) |
+| extension column, paragraphs, contents, tables | `layout/extend.py` (pages in `[project] notes_pages`) | `segment/prose.py` paragraphs, `layout/scan_place.py` widened column (`output_standard = 2`) |
+| labels below the Russian | `layout/place.py` | `layout/scan_place.py` (never above with `output_standard = 2`) |
+| `图签译文` line | `layout/extend.py` | `layout/scan_place.py` legend (title-block texts read whole by `page_notes` replace OCR fragments) |
