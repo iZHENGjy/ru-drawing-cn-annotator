@@ -6,13 +6,13 @@ standards that actually occur in a set.
     pdf, n = render(hits, code)                  # A4 pages, reportlab, same Chinese font as the TOC
     append_to_pdf(final_pdf, out_pdf, hits, code)  # appended after the last drawing page + bookmark
 
-Data: glossary/ref_materials.json and glossary/ref_standards.json (curated, public-knowledge
+Data: glossary/ru-zh/ref_materials.json and glossary/ru-zh/ref_standards.json (curated, public-knowledge
 approximations; every row has a level 近似 | 无直接对应 and a note on the key difference).
 Every appendix page carries the disclaimer DISCLAIMER.  Nothing here is ever an equivalence claim.
 """
 import io
 import json
-import re
+from i18n import re_src as re  # source-language patterns (unchanged for ru)
 from collections import Counter
 from pathlib import Path
 
@@ -22,7 +22,7 @@ from reportlab.pdfgen import canvas
 
 from . import ctx as C, engine
 
-GLOSSARY = Path(__file__).resolve().parents[2] / "glossary"
+GLOSSARY = Path(__file__).resolve().parents[2] / "glossary" / "ru-zh"
 DISCLAIMER = "本对照仅供参考,不构成等同替换依据,以设计文件及适用规范为准"
 SECTIONS = [("rebar", "一、钢筋 Арматура"), ("concrete", "二、混凝土强度等级 Классы бетона"),
             ("wf", "三、混凝土抗渗/抗冻 Марки W / F"), ("steel", "四、结构钢材 Конструкционная сталь"),

@@ -7,22 +7,23 @@ number, member mark, steel grade or standard number that is not in its source te
 """
 from __future__ import annotations
 
-import re
+from i18n import re_src as re  # source-language patterns (unchanged for ru)
 
+import i18n
 from engine.tm import NUM, PH, TM
 
-CJK = re.compile(r"[㐀-鿿]")
-CYR_RUN = re.compile(r"[А-Яа-яЁё]+")
-# member marks — same expression as scripts/scan/50_check.py (MARK)
-MARK = re.compile(r"([А-ЯЁ]м|МН)\s?(\d+(?:\.\d+)?(?:-\d+)?)")
+CJK = i18n.TGT_CHAR_X                  # target script ([㐀-鿿] for Chinese)
+CYR_RUN = i18n.SRC_RUN                 # source-script run ([А-Яа-яЁё]+ for ru)
+# member marks — same expression as scripts/scan/50_check.py (MARK); [guard] mark_regex overrides
+MARK = i18n.MARK                  # [guard] mark_regex / ГОСТ marks for ru
 # rebar / structural steel grades: А240, А500С, В500С, С345, С345-5, С255Б ...
 GRADE = re.compile(r"(?<![A-Za-zА-Яа-яЁё\d])([АAВBСC]\s?\d{3}(?:[СCНHТTБ])?(?:-\d)?)(?!\d)")
 # standards: ГОСТ 34028-2016, ГОСТ Р 52544-2006, СП 63.13330.2018, СНиП 2.03.01-84, ТУ 14-1-5254
-STD = re.compile(r"(?<![A-Za-zА-Яа-яЁё])(ГОСТ|GOST|СНиП|СП|SP|ТУ|TU)\s*(?:Р\s*|R\s*)?(\d[\d.\-–]*\d|\d)")
+STD = i18n.rx_fn(lambda p: r"(?<![A-Za-zА-Яа-яЁё])(ГОСТ|GOST|СНиП|СП|SP|ТУ|TU)\s*(?:Р\s*|R\s*)?(\d[\d.\-–]*\d|\d)" if p.src.code == "ru"
+                 else i18n.adapt(r"(?<![A-Za-zА-Яа-яЁё])(" + (i18n.guard("std_regex") or p.src.std or "(?!)") + r")\s*(?:Р\s*|R\s*)?(\d[\d.\-–]*\d|\d)", p))
 COUNT_ONLY = re.compile(r"/?\s*(\d[\d+()]*\s*|⟨\d+⟩\s*)?(根|件|个|间距\s*(\d*|⟨\d+⟩))")
 DEC_COMMA = re.compile(r"(?<![\d,])(\d+,\d+)(?![\d,])(?!-[A-Za-zА-Яа-яЁё])")
-MONTHS = {"январ": "1", "феврал": "2", "март": "3", "апрел": "4", "мая": "5", "май": "5", "июн": "6",
-          "июл": "7", "август": "8", "сентябр": "9", "октябр": "10", "ноябр": "11", "декабр": "12"}
+MONTHS = i18n.PROFILES["ru"].months      # month names of the source language: i18n.pair().src.months
 _HOMO = str.maketrans("ABCEHKMOPTXaceopxy", "АВСЕНКМОРТХасеорху")
 ITEM_ERR = re.compile(r"^\[([^\]]+)\] ")
 
@@ -52,8 +53,14 @@ def numbers(s: str) -> set[str]:
     return out
 
 
+def _tgt() -> str:
+    """target language name in error texts (they go into retry prompts: ru-zh keeps 'Chinese')."""
+    return "Chinese" if i18n.pair().tgt.code == "zh" else i18n.pair().tgt.name
+
+
 def has_cjk(s: str) -> bool:
-    return bool(CJK.search(s or ""))
+    """the answer contains target-language text (Chinese for ru-zh; the name is historical)."""
+    return i18n.has_target(s)
 
 
 def check_against(zh: str, src: str, known_marks=()) -> list[str]:
@@ -84,7 +91,7 @@ def check_against(zh: str, src: str, known_marks=()) -> list[str]:
     # numbers
     allowed = numbers(src)
     low = (src or "").lower()
-    months = {v for k, v in MONTHS.items() if k in low}
+    months = {v for k, v in i18n.pair().src.months.items() if k in low}
     extra = []
     for n in sorted(numbers(z_rest)):
         if n in allowed:
@@ -94,16 +101,16 @@ def check_against(zh: str, src: str, known_marks=()) -> list[str]:
         extra.append(n)
     if extra:
         errs.append(f"numbers {extra} in zh are not in the source text (copy numbers exactly, never add any)")
-    m = DEC_COMMA.search(zh)
+    m = DEC_COMMA.search(zh) if i18n.pair().tgt.code in ("zh", "en") else None   # ru/de/fr write decimal commas
     if m:
         errs.append(f"decimal comma {m.group(1)!r} in zh: use a point")
     # Cyrillic: only copied codes
     for m in CYR_RUN.finditer(zh):
         w = m.group(0)
         if norm(w) not in srcn:
-            errs.append(f"Russian {w!r} in zh is not in the source")
-        elif len(w) >= 3 and w.islower():
-            errs.append(f"untranslated Russian word {w!r} in zh")
+            errs.append(f"{i18n.pair().src.name} {w!r} in zh is not in the source")
+        elif (len(w) >= 3 and w.islower()) if i18n.pair().src.script != "hani" else True:
+            errs.append(f"untranslated {i18n.pair().src.name} word {w!r} in zh")
     return errs
 
 
@@ -161,7 +168,7 @@ def validate_phrase_translate(payload: dict, out: dict, schema: dict) -> list[st
         p = f"[{o['id']}] "
         zh, key = o["zh"].strip(), it["key"]
         if not has_cjk(zh):
-            errs.append(p + "action translate needs Chinese in zh (use keep for codes/names)")
+            errs.append(p + f"action translate needs {_tgt()} in zh (use keep for codes/names)")
             continue
         e = TM.check_entry(key, zh)
         if e:
@@ -171,9 +178,9 @@ def validate_phrase_translate(payload: dict, out: dict, schema: dict) -> list[st
         for m in CYR_RUN.finditer(zh):
             w = m.group(0)
             if norm(w) not in norm(key):
-                errs.append(p + f"Russian {w!r} in zh is not in key")
-            elif sum(c.islower() for c in w) >= 3:          # names/words: action keep, not translate
-                errs.append(p + f"untranslated Russian word {w!r} in zh")
+                errs.append(p + f"{i18n.pair().src.name} {w!r} in zh is not in key")
+            elif i18n.untranslated(w):          # names/words: action keep, not translate
+                errs.append(p + f"untranslated {i18n.pair().src.name} word {w!r} in zh")
     return errs
 
 

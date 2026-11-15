@@ -26,7 +26,23 @@ class Task:
         self.name = mod.NAME
         self.prompt_version = mod.PROMPT_VERSION
         self.schema = mod.SCHEMA
-        self.prompt = (_HERE / f"{self.name}.md").read_text(encoding="utf-8").strip()
+        self._prompt = (_HERE / f"{self.name}.md").read_text(encoding="utf-8").strip()
+
+    @property
+    def prompt(self) -> str:
+        """ru-zh: <name>.md (unchanged, so cached answers replay).  Other pairs: <name>.<src>-<tgt>.md if
+        present, else <name>.generic.md with {SRC} {TGT} {STD} filled in."""
+        import i18n
+        p = i18n.pair()
+        if p.default:
+            return self._prompt
+        f = _HERE / f"{self.name}.{p.key}.md"
+        if not f.exists():
+            f = _HERE / f"{self.name}.generic.md"
+        s = f.read_text(encoding="utf-8").strip()
+        for k, v in p.prompt_vars().items():
+            s = s.replace("{" + k + "}", v)
+        return s
 
     def system(self, background: str = "") -> str:
         s = self.prompt

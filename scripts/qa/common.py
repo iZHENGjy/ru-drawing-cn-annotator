@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -9,7 +10,9 @@ import pymupdf
 
 # scan/engine.py BLUE = (0x00, 0x2E, 0xBF): colour of every Chinese span the engine draws
 BLUE_RGB = (0x00, 0x2E, 0xBF)
-CJK = re.compile(r"[\u4e00-\u9fff]")
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import i18n  # noqa: E402
+CJK = i18n.TGT_CHAR                     # target script (Chinese: the same class as before)
 
 
 def is_blue(color: int, tol: int = 4) -> bool:

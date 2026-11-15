@@ -4,9 +4,25 @@ import tomllib
 from copy import deepcopy
 from pathlib import Path
 
+import sys
+
 REPO = Path(__file__).resolve().parents[2]
-DEFAULT_GLOSSARY = REPO / "glossary" / "gost_general.json"
-DEFAULT_GLOSSARIES = [DEFAULT_GLOSSARY, REPO / "glossary" / "spds_sheet_frame.json"]   # public base layers
+sys.path.insert(0, str(REPO / "scripts"))
+import i18n  # noqa: E402
+
+DEFAULT_GLOSSARY = REPO / "glossary" / "ru-zh" / "gost_general.json"
+DEFAULT_GLOSSARIES = [DEFAULT_GLOSSARY, REPO / "glossary" / "ru-zh" / "spds_sheet_frame.json"]   # ru-zh base layers
+LEGACY_GLOSSARY = {REPO / "glossary" / n: REPO / "glossary" / "ru-zh" / n
+                   for n in ("gost_general.json", "spds_sheet_frame.json", "ref_materials.json", "ref_standards.json")}
+
+
+def legacy_glossary(p: Path) -> Path:
+    """old path glossary/<name>.json (before glossaries were grouped by language pair) -> glossary/ru-zh/<name>.json"""
+    p = Path(p)
+    try:
+        return LEGACY_GLOSSARY.get(p.resolve(), p) if not p.exists() else p
+    except OSError:
+        return p
 
 LLM_DEFAULTS = {
     "backend": "claude-cli", "concurrency": 4, "budget_usd": 20, "background": "",
@@ -40,6 +56,7 @@ class JobConfig:
         self.path = Path(path).resolve()
         self.root = self.path.parent
         self.raw = raw
+        self.pair = i18n.from_config(raw)
         self.llm = _merge(LLM_DEFAULTS, raw.get("llm", {}))
         self.tm = _merge(TM_DEFAULTS, raw.get("tm", {}))
         self.job = _merge(JOB_DEFAULTS, raw.get("job", {}))
@@ -82,8 +99,9 @@ class JobConfig:
         return self.work_dir / "job"
 
     def tm_cfg(self) -> dict:
-        gl = [self._rel(g) for g in self.tm["glossaries"]]
-        for i, dg in enumerate(g for g in DEFAULT_GLOSSARIES if g.exists()):
+        gl = [legacy_glossary(self._rel(g)) for g in self.tm["glossaries"]]
+        base = DEFAULT_GLOSSARIES if self.pair.default else self.pair.base_glossaries()
+        for i, dg in enumerate(g for g in base if g.exists()):
             if dg not in gl:
                 gl.insert(i, dg)
         return {"project": str(self._rel(self.tm["project"])), "shared": [str(self._rel(s)) for s in self.tm["shared"]],

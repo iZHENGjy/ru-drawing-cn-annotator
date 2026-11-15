@@ -12,11 +12,11 @@ Refuses answers that skip a ref, and Chinese whose digits differ from the Russia
 """
 import argparse
 import json
-import re
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from i18n import re_src as re  # source-language patterns (unchanged for ru)
 from scan import ctx as C  # noqa: E402
 
 

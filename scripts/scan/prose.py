@@ -8,7 +8,7 @@ segments / automap / the engine can treat the paragraph as one text:
 Boxes are in the units of the input (normalised in segments/automap).
 """
 from __future__ import annotations
-import re
+from i18n import re_src as re  # source-language patterns (unchanged for ru)
 
 CYRW = re.compile(r"[А-Яа-яЁё]{2,}")
 BREAK_START = re.compile(r"^(?:[-–—•]\s|\d{1,2}(?:\.\d{1,2})*[.)]?\s+[А-ЯЁA-Z«\"]|[а-яё]\)\s)")

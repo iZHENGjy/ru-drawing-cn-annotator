@@ -76,7 +76,7 @@ def main():
         lines = C.build_lines(ctx.ocr(pg))
         C.write_lines(ctx.lines(pg), lines, r.width, r.height)
         cyr = sum(1 for d in lines if len(C.CYR.findall(d["text"])) >= 2)
-        return f"p{pg:02d}: {len(lines)} lines, {cyr} Russian"
+        return f"p{pg:02d}: {len(lines)} lines, {cyr} " + ("Russian" if C.i18n.pair().src.code == "ru" else "source")
 
     with ThreadPoolExecutor(a.threads) as ex:
         for m in ex.map(run, pages):

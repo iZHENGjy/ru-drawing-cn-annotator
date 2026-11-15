@@ -2,10 +2,11 @@
 frequency -> <review>/unique_ru_lines.csv (text, count, first_page, n_pages).
 This is the work list for building the translation memory.
 usage: 02_lines.py [--config project.toml]"""
-import argparse, csv, json, re, sys
+import argparse, csv, json, sys
 from collections import Counter, defaultdict
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from i18n import re_src as re  # source-language patterns (unchanged for ru)
 
 CYR = re.compile(r"[А-Яа-яЁё]")
 

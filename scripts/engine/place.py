@@ -8,6 +8,7 @@ from .layout import (Run, Word, digits, needs_replacement, to_frame_rect, from_f
 
 import os
 from pathlib import Path
+import i18n
 
 # Chinese font: $RUDRAW_FONT, project.toml [project] font, or the first one found here.
 # Last resort is PyMuPDF's built-in CJK font (Droid Sans Fallback).
@@ -35,9 +36,10 @@ FALLBACK: pymupdf.Font
 def set_font(fontfile: str | None = None):
     """Select the Chinese font (None: environment / auto-detect / built-in)."""
     global FONT_FILE, FONT, FALLBACK
-    FONT_FILE = fontfile or os.environ.get("RUDRAW_FONT") or _first(FONT_CANDIDATES)
-    FONT = pymupdf.Font(fontfile=FONT_FILE) if FONT_FILE else pymupdf.Font("cjk")
-    fb = _first(FALLBACK_CANDIDATES)
+    pr = i18n.pair()
+    FONT_FILE = fontfile or os.environ.get("RUDRAW_FONT") or _first(FONT_CANDIDATES if pr.default else pr.fonts)
+    FONT = pymupdf.Font(fontfile=FONT_FILE) if FONT_FILE else pymupdf.Font("cjk" if pr.tgt.script == "hani" else "helv")
+    fb = _first(FALLBACK_CANDIDATES if pr.default else pr.fallback_fonts)
     FALLBACK = pymupdf.Font(fontfile=fb) if fb else FONT
 
 
@@ -224,16 +226,23 @@ def add_words(words):
 
 add_words(BASE_WORDS)
 
-LATIN_RUN = r"[A-Za-zА-Яа-яЁё0-9⟨⟩.,×xх=+\-/()%°²³Ø№\"«»₁:]+"
+LATIN_RUN = r"[A-Za-zА-Яа-яЁё0-9⟨⟩.,×xх=+\-/()%°²³Ø№\"«»₁:]+"     # ru-zh; other pairs: _latin_run()
+
+
+def _latin_run() -> str:
+    """runs that are never broken: Latin + the alphabets of source and target (CJK excluded)."""
+    if i18n.pair().default:
+        return LATIN_RUN
+    return "[A-Za-z" + i18n.run_letters() + r'0-9⟨⟩.,×xх=+\-/()%°²³Ø№"«»₁:]+'
 
 
 def tokens(s: str):
     """Word-level tokens: Latin/Cyrillic/number runs stay whole, Chinese is segmented
     into words with jieba so a line never breaks inside a word."""
     out = []
-    for m in re.finditer(LATIN_RUN + r"|\s+|[一-鿿]+|.", s):
+    for m in re.finditer(_latin_run() + r"|\s+|[一-鿿]+|.", s):
         t = m.group()
-        if re.fullmatch(r"[一-鿿]+", t):
+        if re.fullmatch(r"[一-鿿]+", t) and i18n.pair().jieba:
             out.extend(jieba.lcut(t, HMM=False))
         else:
             out.append(t)

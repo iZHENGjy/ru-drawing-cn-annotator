@@ -19,20 +19,34 @@ Shared TMs may be in this format or a flat ``{key: zh}`` dict (engine/tm.py form
 from __future__ import annotations
 
 import json
-import re
+from i18n import re_src as re  # source-language patterns (unchanged for ru)
 import time
 from dataclasses import dataclass
 from pathlib import Path
 
+import i18n
 from engine import tm as T
 from scan import segments as S
 
 REPO = Path(__file__).resolve().parents[2]
-DEFAULT_GLOSSARY = REPO / "glossary" / "gost_general.json"
-DEFAULT_GLOSSARIES = [DEFAULT_GLOSSARY, REPO / "glossary" / "spds_sheet_frame.json"]   # public base layers
+DEFAULT_GLOSSARY = REPO / "glossary" / "ru-zh" / "gost_general.json"
+DEFAULT_GLOSSARIES = [DEFAULT_GLOSSARY, REPO / "glossary" / "ru-zh" / "spds_sheet_frame.json"]   # ru-zh base layers
+
+
+def base_glossaries() -> list[Path]:
+    """public base glossaries of the active language pair (glossary/<src>-<tgt>/)."""
+    p = i18n.pair()
+    return DEFAULT_GLOSSARIES if p.default else p.base_glossaries()
+
+
+def legacy(p: Path) -> Path:
+    """glossary/<name>.json (old layout) -> glossary/ru-zh/<name>.json"""
+    if not p.exists() and p.parent.name == "glossary" and (p.parent / "ru-zh" / p.name).exists():
+        return p.parent / "ru-zh" / p.name
+    return p
 MARK = re.compile(r"(^|[^а-яa-z])[бвпркмфс][мm](?=\s?⟨)")      # Км⟨1⟩, Бм (BM -> вм)
 ABBR = re.compile(r"(^|[^а-я])(п\.м|м\.п|(см|ед|кг|отм|поз|прим|зам|изм|разд|табл|ч|л|т)\.)")   # п.м = 延米
-CJK = re.compile(r"[一-鿿]")
+CJK = i18n.TGT_CHAR                      # target script (Chinese for ru-zh)
 PH = T.PH
 SPEC = re.compile(r"гост|gost|ту\b|сп\b|снип|ост\b|din\b|en\b|iso\b|a\d{3}c?|а\d{3}с?|с\d{3}|l=|мм|mm|кг|kg|шт|pcs|sp\b"
                   r"|[a-zа-я]{1,2}\d", re.I)
@@ -67,8 +81,8 @@ class TMStore:
         cfg = cfg or {}
         self.root = Path(root or Path.cwd())
         self.path = _abs(self.root, cfg.get("project", "tm/project.json"))
-        gl = [_abs(self.root, g) for g in cfg.get("glossaries", [])]
-        for i, dg in enumerate(g for g in DEFAULT_GLOSSARIES if g.exists()):
+        gl = [legacy(_abs(self.root, g)) for g in cfg.get("glossaries", [])]
+        for i, dg in enumerate(g for g in base_glossaries() if g.exists()):
             if dg not in gl:
                 gl.insert(i, dg)
         # layer -> {fold: entry}; contexts '@tb|' / '@body|' stored under ('tb'|'body', fold)

@@ -42,7 +42,7 @@ def test_data_files_wellformed():
         if r["level"] == "无直接对应":
             assert r["cn"] == "—"            # never an invented counterpart
     for fn in ("ref_materials.json", "ref_standards.json"):
-        assert json.loads((ROOT / "glossary" / fn).read_text(encoding="utf-8"))["disclaimer"] == appendix.DISCLAIMER
+        assert json.loads((ROOT / "glossary" / "ru-zh" / fn).read_text(encoding="utf-8"))["disclaimer"] == appendix.DISCLAIMER
 
 
 def test_appendix_selects_rows_by_detected_grades():

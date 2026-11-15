@@ -9,11 +9,12 @@ Sections come from project.toml:
 
 Without sections the whole document is one section.
 usage: 05_volume.py [--config project.toml]   ->  <review>/volume_by_section.csv"""
-import argparse, csv, json, re, sys
+import argparse, csv, json, sys
 from collections import Counter
 from importlib import import_module
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from i18n import re_src as re  # source-language patterns (unchanged for ru)
 from engine import config
 lines_of = import_module("02_lines").lines_of
 

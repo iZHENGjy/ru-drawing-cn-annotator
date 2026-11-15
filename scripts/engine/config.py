@@ -9,6 +9,10 @@ from __future__ import annotations
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import i18n  # noqa: E402
 
 # Labels of a ГОСТ 21.101 / ГОСТ Р 21.101 title block (основная надпись).  Their
 # bounding box marks the title-block area, where short words get title-block
@@ -56,6 +60,7 @@ def load(path: str | Path | None = None) -> Config:
         _resolve(c, c.root)
         return c
     d = tomllib.loads(path.read_text(encoding="utf-8"))
+    i18n.from_config(d)
     root = path.parent
     p = d.get("project", {})
     tb = d.get("title_block", {})
@@ -71,7 +76,7 @@ def load(path: str | Path | None = None) -> Config:
     c.extract = p.get("extract_dir", c.extract)
     c.font = p.get("font")
     c.notes_pages = str(p.get("notes_pages", ""))
-    c.tb_anchors = tb.get("anchors", c.tb_anchors)
+    c.tb_anchors = tb.get("anchors", c.tb_anchors if i18n.pair().src.code == "ru" else list(i18n.pair().src.tb_anchors))
     c.left_stamp = float(tb.get("left_stamp_width", c.left_stamp))
     c.names = keep.get("names", [])
     c.acronyms = keep.get("acronyms", [])
@@ -81,11 +86,18 @@ def load(path: str | Path | None = None) -> Config:
     return c
 
 
+def _legacy(p: Path) -> Path:
+    """glossary/<name>.json (before glossary/<src>-<tgt>/ folders) -> glossary/ru-zh/<name>.json"""
+    if p and not p.exists() and p.parent.name == "glossary" and (p.parent / "ru-zh" / p.name).exists():
+        return p.parent / "ru-zh" / p.name
+    return p
+
+
 def _resolve(c: Config, root: Path):
     c.pdf = _p(root, c.pdf)
     c.dxf = _p(root, c.dxf)
     c.tm = _p(root, c.tm)
-    c.glossaries = [_p(root, g) for g in c.glossaries]
+    c.glossaries = [_legacy(_p(root, g)) for g in c.glossaries]
     c.review = _p(root, c.review)
     c.output = _p(root, c.output)
     c.extract = _p(root, c.extract)
@@ -96,6 +108,6 @@ def apply(c: Config):
     from . import layout, place
     layout.NAMES.update(c.names)
     layout.ACRONYMS.update(c.acronyms)
-    if c.font:
+    if c.font or not i18n.pair().default:
         place.set_font(c.font)
     place.add_words(c.jieba_words)

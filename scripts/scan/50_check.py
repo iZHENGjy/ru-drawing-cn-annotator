@@ -13,15 +13,16 @@ Exit code 1 only for mark problems (the hard gate).
 """
 import argparse
 import json
-import re
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import i18n
+from i18n import re_src as re  # source-language patterns (unchanged for ru)
 import pymupdf  # noqa: E402
 from scan import ctx as C, segments as S  # noqa: E402
 
-MARK = re.compile(r"([А-ЯЁ]м|МН)\s?(\d+(?:\.\d+)?(?:-\d+)?)")
+MARK = i18n.MARK                  # [guard] mark_regex / ГОСТ marks for ru
 
 
 MONTHS = {"anpen": "4", "январ": "1", "феврал": "2", "март": "3", "апрел": "4", "мая": "5", "май": "5", "июн": "6", "июл": "7",

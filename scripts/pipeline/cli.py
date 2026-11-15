@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 from . import cost, doctor as doctor_mod
+import i18n
 from .config import JobConfig
 from .core import Job
 from . import runner
@@ -24,7 +25,7 @@ def detect_route(pdf: Path, sample: int = 12) -> dict:
         t = doc[i].get_text() or ""
         k = len(re.sub(r"\s", "", t))
         chars += k
-        cyr += len(re.findall(r"[а-яА-ЯёЁ]", t))
+        cyr += len(i18n.SRC_CHAR.findall(t))
         with_text += k >= TEXT_MIN_CHARS
     route = "text" if with_text * 2 > len(idx) else "scan"
     return {"route": route, "pages": n, "sampled": len(idx), "pages_with_text": with_text,

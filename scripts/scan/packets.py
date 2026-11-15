@@ -15,7 +15,7 @@ Region detection is pure OCR geometry (shared with automap):
 """
 from __future__ import annotations
 
-import re
+from i18n import re_src as re  # source-language patterns (unchanged for ru)
 from pathlib import Path
 
 from scan import segments as S

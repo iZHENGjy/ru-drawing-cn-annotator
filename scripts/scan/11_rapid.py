@@ -16,6 +16,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from scan import ctx as C  # noqa: E402
+import i18n  # noqa: E402
 
 
 def main():
@@ -33,7 +34,7 @@ def main():
     Image.MAX_IMAGE_PIXELS = None
     cfg = C.load(a.config)
     ctx = C.Ctx(cfg); ctx.mkdirs()
-    eng = RapidOCR(params={"Rec.lang_type": LangRec.ESLAV, "Rec.ocr_version": OCRVersion.PPOCRV5,
+    eng = RapidOCR(params={"Rec.lang_type": getattr(LangRec, i18n.pair().rapid_lang), "Rec.ocr_version": OCRVersion.PPOCRV5,
                            "Rec.model_type": ModelType.MOBILE, "Global.log_level": "error",
                            "Global.max_side_len": 2400, "Global.text_score": 0.3,
                            "EngineConfig.onnxruntime.intra_op_num_threads": a.threads, "Global.use_cls": True})

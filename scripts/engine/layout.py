@@ -10,9 +10,10 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 import pymupdf
+import i18n
 
-CYR = re.compile(r"[А-Яа-яЁё]")
-CYR_LOW2 = re.compile(r"[а-яё]{2,}")
+CYR = i18n.SRC_CHAR                     # source-script character ([А-Яа-яЁё] for ru)
+CYR_LOW2 = i18n.rx(r"[а-яё]{2,}")
 LAT2 = re.compile(r"[A-Za-z]{2,}")
 STD_TOKENS = {"ГОСТ", "ГОСТР", "СП", "СНиП", "ТУ", "СТО", "ПБ", "ФЗ", "GOST", "SP", "SNiP", "TU"}
 UNIT_EN = {"kg", "t", "m", "m2", "m3", "m²", "m³", "mm", "cm", "kN", "MPa", "kPa"}
@@ -165,11 +166,15 @@ class Run:
 
 # ---------------------------------------------------------------- word language
 def word_lang(t: str) -> str:
+    """'ru' = source language (the historical tag), 'en' = second Latin language of a bilingual
+    drawing, 'neu' = codes / numbers / names, 'mix' = Russian/English glued by a slash."""
     core = t.strip("()[]:;,.«»\"'-–—/")
     if not core:
         return "neu"
     if core in STD_TOKENS or core in NAMES or core in ACRONYMS or core in RU_UNITS:
         return "neu"
+    if i18n.pair().src.code != "ru":
+        return _word_lang_generic(core, t)
     has_c, has_l = bool(CYR.search(core)), bool(LAT2.search(core))
     has_d = any(ch.isdigit() for ch in core)
     lower_c = bool(re.search(r"[а-яё]", core))
@@ -190,6 +195,33 @@ def word_lang(t: str) -> str:
             return "neu"
         return "en" if LAT2.search(core) else "neu"
     return "neu"
+
+
+def _word_lang_generic(core: str, t: str) -> str:
+    """word_lang for a source language other than Russian (same idea: codes and numbers are neutral)."""
+    p = i18n.pair()
+    if core in UNIT_EN or core.lower() in UNIT_EN:
+        return "neu"
+    has_d = any(ch.isdigit() for ch in core)
+    has_s = bool(CYR.search(core))
+    if p.src.script == "hani":
+        if has_s:
+            return "ru"
+        if p.second_latin and LAT2.search(core) and not has_d and not re.match(r"^[A-Z]{1,3}$", core):
+            return "en"
+        return "neu"
+    if not has_s:
+        if p.second_latin and LAT2.search(core) and not re.match(r"^[A-Z]{1,3}[\d.,\-]+\w*$", core):
+            return "en"
+        return "neu"
+    low2 = bool(CYR_LOW2.search(core))
+    if has_d and not low2:                                       # HRB400, C30, B-12, L=2400
+        return "neu"
+    if len(core) == 1:
+        return "neu"
+    if not low2 and len(core) <= 3 and "." not in t:             # codes: RC, PL, B1
+        return "neu"
+    return "ru"
 
 
 def split_mixed(w: Word) -> list[Word]:

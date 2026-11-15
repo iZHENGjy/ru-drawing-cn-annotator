@@ -14,7 +14,8 @@ Per page:
 Reports: <review>/report.csv, <review>/tm_todo.json
 """
 from __future__ import annotations
-import csv, json, re, time
+import csv, json, time
+from i18n import re_src as re  # source-language patterns (unchanged for ru)
 from collections import Counter
 from pathlib import Path
 import pymupdf

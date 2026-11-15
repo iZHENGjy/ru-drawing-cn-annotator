@@ -18,7 +18,7 @@ from __future__ import annotations
 import csv
 import json
 import os
-import re
+from i18n import re_src as re  # source-language patterns (unchanged for ru)
 import shutil
 import sys
 import tomllib
@@ -26,8 +26,12 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import i18n  # noqa: E402
+
 K = 72.0 / 300.0                      # 300 dpi pixel -> pt
-CYR = re.compile(r"[а-яА-ЯёЁ]")
+CYR = i18n.SRC_CHAR                   # source-script character (Cyrillic for ru)
+LETTER = i18n.rx(r"[A-Za-zА-Яа-яЁё]")
 csv.field_size_limit(10 ** 7)
 
 
@@ -42,7 +46,7 @@ class ScanConfig:
     font: str | None = None
     tesseract: str | None = None          # tesseract.exe; default: $TESSERACT / PATH / usual install dir
     tessdata: str | None = None           # folder with rus.traineddata (tessdata_best recommended)
-    lang: str = "rus+eng"
+    lang: str = ""                        # Tesseract -l; "" = by source language (ru: rus+eng)
     count_word: str = "根"                 # шт./pcs. -> 根 (rebar sets) or 件 (embedded items, parts)
     title_code_regex: str = ""            # drawing-code pattern that helps find the title block
     stamp_image_size: list[int] = field(default_factory=list)   # [w, h] px of a raster approval stamp
@@ -69,6 +73,7 @@ def _p(root: Path, v):
 def load(path: str | Path | None = None) -> ScanConfig:
     path = Path(path or "project.toml").resolve()
     d = tomllib.loads(path.read_text(encoding="utf-8"))
+    i18n.from_config(d)
     s = d.get("scan", {})
     c = ScanConfig(root=path.parent)
     for k, v in s.items():
@@ -80,6 +85,7 @@ def load(path: str | Path | None = None) -> ScanConfig:
     c.pdf = _p(c.root, s.get("pdf") or d.get("project", {}).get("pdf"))
     c.work = _p(c.root, s.get("work", "scan"))
     c.output = _p(c.root, s.get("output", d.get("project", {}).get("output_dir", "output")))
+    c.lang = c.lang or i18n.pair().tess_lang
     return c
 
 
@@ -136,7 +142,7 @@ def build_lines(tsv: Path):
     for key in sorted(groups):
         g = groups[key]
         txt = " ".join(t for _, t in g)
-        if len(re.findall(r"[A-Za-zА-Яа-яЁё]", txt)) < 2:
+        if len(LETTER.findall(txt)) < 2:
             continue
         out.append(dict(text=txt, x0=min(b[0] for b, _ in g), y0=min(b[1] for b, _ in g),
                         x1=max(b[2] for b, _ in g), y1=max(b[3] for b, _ in g)))
@@ -208,16 +214,12 @@ def find_tesseract(cfg: ScanConfig) -> str:
 
 
 # same order as engine/place.py (kept here so the scan route does not need jieba)
-FONT_CANDIDATES = [
-    "C:/Windows/Fonts/Deng.ttf", "C:/Windows/Fonts/simhei.ttf", "C:/Windows/Fonts/msyh.ttc",
-    "/System/Library/Fonts/PingFang.ttc", "/System/Library/Fonts/STHeiti Light.ttc",
-    "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc", "/usr/share/fonts/wqy-microhei/wqy-microhei.ttc",
-    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc", "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
-]
+FONT_CANDIDATES = i18n.CJK_FONTS
 
 
 def font_file(cfg: ScanConfig) -> str:
-    for c in (cfg.font, os.environ.get("RUDRAW_FONT"), *FONT_CANDIDATES):
+    """Target-language font: CJK for a Chinese target, Latin/Cyrillic otherwise ([scan] font wins)."""
+    for c in (cfg.font, os.environ.get("RUDRAW_FONT"), *i18n.pair().fonts):
         if c and Path(c).is_file():
             return str(c)
-    sys.exit("no Chinese font found: set RUDRAW_FONT or [scan] font")
+    sys.exit(f"no {i18n.pair().tgt.name} font found: set RUDRAW_FONT or [scan] font")

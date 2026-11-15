@@ -9,7 +9,7 @@ is set in that column:
 - title-block / margin-stamp fields go into one ``图签译文：`` line (only if the page has them).
 """
 from __future__ import annotations
-import re
+from i18n import re_src as re  # source-language patterns (unchanged for ru)
 
 import pymupdf
 

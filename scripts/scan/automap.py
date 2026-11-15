@@ -20,14 +20,15 @@ Count labels (4根 / 间距) are never written: the engine labels шт./pcs and 
 from __future__ import annotations
 
 import json
-import re
+import i18n
+from i18n import re_src as re  # source-language patterns (unchanged for ru)
 from pathlib import Path
 
 from scan import packets as K
 from scan import segments as S
 
 APPX_ZH = "说明(中文译文见右侧)"
-CJK = re.compile(r"[一-鿿]")
+CJK = i18n.TGT_CHAR                  # target script ([一-鿿] for Chinese)
 COUNT_ZH = re.compile(r"^/?\s*(\d[\d+()]*\s*)?(根|件|个|间距\s*\d*)$")
 MARK = re.compile(r"[БПРКМбпркм][мmM]\s?\d[\d.,]*|[МM][НH]\d")
 UNIT = r"(?:\s*(?:mm|毫米|мм|m|米|kg|кг|t|吨|°|%|кПа|kPa))?"
@@ -126,7 +127,7 @@ def _same_clause(a, b):
     return (a.get("zh") or "").strip() == (b.get("zh") or "").strip()
 
 
-MARK_RE = re.compile(r"([А-ЯЁ]м|МН)\s?(\d+(?:\.\d+)?(?:-\d+)?)")
+MARK_RE = i18n.MARK                  # [guard] mark_regex / ГОСТ marks for ru
 # letters OCR confuses inside member marks (Бм <-> Вм, Пм <-> Рм <-> Пм)
 MARK_CONF = [set("БВ"), set("ПР")]
 

@@ -21,11 +21,12 @@ import csv
 import difflib
 import hashlib
 import json
-import re
+from i18n import re_src as re  # source-language patterns (unchanged for ru)
 import unicodedata
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import i18n
 from engine import tm as T
 
 CYR = re.compile(r"[а-яА-ЯёЁ]")
@@ -42,8 +43,8 @@ COUNT_TOK = re.compile(r"(шт|ш|wt|w|m|lut|lu|wit|wi|wr)\.?\s*/\s*(p[cсe]+[s�
 # ---------------------------------------------------------------- normalisation
 def _fix_word(w: str) -> str:
     """Latin look-alikes inside a Cyrillic word -> Cyrillic; Tpy6a (all look-alikes with a
-    digit inside letters) -> Труба."""
-    if not LETTER.search(w):
+    digit inside letters) -> Труба.  Cyrillic sources only."""
+    if not i18n.pair().lookalike or not LETTER.search(w):
         return w
     has_cyr = bool(CYR.search(w))
     has_lat = bool(re.search(r"[A-Za-z]", w))
@@ -63,6 +64,9 @@ _MARKLAT = re.compile(r"(?<![A-Za-zА-Яа-яЁё])([A-ZА-ЯЁ])([mм]|[HН])(?
 def norm_marks(text: str) -> str:
     """Member marks written with Latin look-alikes -> Cyrillic (MH4 -> МН4, Bm2.5 -> Вм2.5), so
     mark sets from notes, OCR and translations compare equal."""
+    if not i18n.pair().lookalike:
+        return text or ""
+
     def conv(m):
         a, b = m.group(1), m.group(2)
         if b in "HН" and a not in "MМ":
@@ -78,7 +82,7 @@ def lookalike_cyr(text: str, per_word: bool = False) -> str | None:
     """A Latin-only reading whose letters are all Cyrillic look-alikes (Macca -> Масса), else None.
     ``per_word``: convert only such words of ≥3 letters (Macca/Weight -> Масса/Weight)."""
     t = text or ""
-    if CYR.search(t):
+    if CYR.search(t) or not i18n.pair().lookalike:
         return None
     if per_word:
         hits = 0
@@ -106,8 +110,9 @@ def norm(text: str) -> str:
     s = re.sub(r"@\s?(?=\d)", "Ø", s)                      # @220 -> Ø220 (OCR of the diameter sign)
     s = re.sub(r"[–—−‒]", "-", s)
     s = re.sub(r"[«»“”„‟\"]", '"', s).replace("‚", ",").replace("’", "'")
-    s = re.sub(r"\b[ГTF][OО][CС][TТ]\b", "ГОСТ", s)          # FOCT / TOCT / ГOCT
-    s = re.sub(r"\b[СC][OО][З3][TТ]\b", "GOST", s)           # GOST read as Cyrillic СОЗТ
+    if i18n.pair().lookalike:
+        s = re.sub(r"\b[ГTF][OО][CС][TТ]\b", "ГОСТ", s)          # FOCT / TOCT / ГOCT
+        s = re.sub(r"\b[СC][OО][З3][TТ]\b", "GOST", s)           # GOST read as Cyrillic СОЗТ
     s = re.sub(r"[A-Za-zА-Яа-яЁё0-9]+", lambda m: _fix_word(m.group(0)), s)
     s = re.sub(r"^[\s|{}\[\]_~`'\\]+|[\s|{}\[\]_~`'\\]+$", "", s)
     s = re.sub(r"\s+", " ", s)
@@ -127,7 +132,9 @@ def make_key(text: str):
 
 def fold(key: str) -> str:
     """Equality form of a key (case, look-alikes, spacing and trailing dots do not count)."""
-    f = key.lower().replace("ё", "е").translate(FOLD)
+    f = key.lower().replace("ё", "е")
+    if i18n.pair().lookalike:
+        f = f.translate(FOLD)
     f = re.sub(r"\s+", " ", f)
     f = re.sub(r"\s*([./,;:()\-=×*])\s*", r"\1", f)
     f = re.sub(r"\s*/\s*", "/", f)
@@ -270,6 +277,9 @@ def bilingual_ru(text: str) -> str:
     """RU/EN pairs whose Russian half OCR read with Latin look-alikes: «Tp./pipe» -> «Тр./pipe»,
     «Tpy6a/Pipe» -> «Труба/Pipe», «Tpyбa/Pipe» -> «Труба/Pipe».  Only the word right before
     «/English» is touched, and only when every character is Cyrillic or a look-alike."""
+    if not i18n.pair().lookalike:
+        return text or ""
+
     def conv(m):
         w = m.group(1)
         if not re.search(r"[A-Za-z]", w) or not re.match(r"[A-Za-zА-Яа-яЁё]", w):

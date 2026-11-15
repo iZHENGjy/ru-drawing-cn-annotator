@@ -41,7 +41,7 @@ def run_ocr(sc: StageCtx):
     bad = [ln for ln in out.splitlines() if "no TSV" in ln]
     if bad:
         raise StageError("; ".join(bad[:3]))
-    m = re.findall(r"p(\d+): (\d+) lines, (\d+) Russian", out)
+    m = re.findall(r"p(\d+): (\d+) lines, (\d+) (?:Russian|source)", out)
     return {"pages": len(m), "lines": sum(int(x[1]) for x in m), "russian_lines": sum(int(x[2]) for x in m)}
 
 

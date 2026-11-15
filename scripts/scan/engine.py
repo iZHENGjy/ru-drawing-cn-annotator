@@ -9,7 +9,7 @@ coverage audit (30_audit.py) can prove that each Russian text region was account
 Coordinates: PDF points, top-left origin, visual page orientation.
 """
 import io
-import re
+from i18n import re_src as re  # source-language patterns (unchanged for ru)
 from collections import defaultdict
 
 import fitz
@@ -21,6 +21,7 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas
 
 from . import ctx as C
+import i18n
 
 FONT = "ZH"
 BLUE = (0x00 / 255, 0x2E / 255, 0xBF / 255)
@@ -52,7 +53,7 @@ def wrap(text, fs, maxw):
             paras.append(para)
     for para in paras:
         # 按「词」装行:连续的字母/数字/符号串(代号、数值如 F200、Км2.1、Ø16)不拆,汉字逐字
-        toks = re.findall(r"[A-Za-zА-Яа-яЁёØ0-9][A-Za-zА-Яа-яЁёØ0-9.,×x+\-=/()]*|\s+|.", para)
+        toks = WORD_TOK.findall(para)
         cur = ""
         for tk in toks:
             if sw(cur + tk, fs) > maxw and cur.strip():
@@ -68,6 +69,10 @@ def wrap(text, fs, maxw):
                 cur += tk
         out.append(cur)
     return out
+
+# target-side words never broken: Latin + non-CJK alphabets of the pair (ru-zh: the original pattern)
+WORD_TOK = i18n.rx_fn(lambda p: r"[A-Za-zА-Яа-яЁёØ0-9][A-Za-zА-Яа-яЁёØ0-9.,×x+\-=/()]*|\s+|." if p.default else
+                      r"[A-Za-z{0}Ø0-9][A-Za-z{0}Ø0-9.,×x+\-=/()]*|\s+|.".format(i18n.run_letters(p)))
 
 APPX = re.compile(r"[,，]?\s*[（(]?\s*(续\s*[,，]\s*)?中文译文见[^)）]*[)）]?")
 
