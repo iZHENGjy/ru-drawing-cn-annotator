@@ -8,9 +8,9 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "scripts"))
+sys.path.insert(0, str(ROOT / "src"))
 
-import i18n  # noqa: E402
+from drawtrans import languages as i18n  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -43,7 +43,7 @@ def test_adapt_and_activate_from_config():
 
 
 def test_re_proxy_and_lazy_regex_follow_the_pair():
-    from i18n import re_src as re
+    from drawtrans.languages import re_src as re
     word = re.compile(r"[А-Яа-яЁё]{3,}")
     assert word.findall("Арматура steel") == ["Арматура"]
     i18n.activate("en", "zh")
@@ -52,7 +52,7 @@ def test_re_proxy_and_lazy_regex_follow_the_pair():
 
 
 def test_word_lang_generic():
-    from engine.layout import word_lang
+    from drawtrans.layout.analyse import word_lang
     assert [word_lang(w) for w in ("Арматура", "A500C", "Steel")] == ["ru", "neu", "en"]
     i18n.activate("en", "zh")
     assert [word_lang(w) for w in ("Reinforcement", "HRB400", "mm", "B1")] == ["ru", "neu", "neu", "neu"]
@@ -61,7 +61,7 @@ def test_word_lang_generic():
 
 
 def test_validator_by_pair():
-    from llm import validate as V
+    from drawtrans.llm import validate as V
     assert V.check_against("钢筋 арматура", "арматура")[0].startswith("untranslated Russian word")
     i18n.activate("en", "zh")
     assert any("untranslated English word 'steel'" in e for e in V.check_against("钢 steel", "steel plate"))
@@ -72,7 +72,7 @@ def test_validator_by_pair():
 
 
 def test_prompts_by_pair():
-    from llm import tasks as T
+    from drawtrans.llm import tasks as T
     t = T.get("phrase_translate")
     ru = t.prompt
     assert ru.startswith("You translate short Russian texts")
@@ -84,7 +84,7 @@ def test_prompts_by_pair():
 
 
 def test_glossary_layout_and_legacy_paths(tmp_path):
-    from scan import tmstore
+    from drawtrans.memory import store as tmstore
     assert all(p.exists() for p in tmstore.DEFAULT_GLOSSARIES)
     assert tmstore.legacy(ROOT / "glossary" / "gost_general.json") == ROOT / "glossary" / "ru-zh" / "gost_general.json"
     i18n.activate("en", "zh")
@@ -95,15 +95,15 @@ def test_glossary_layout_and_legacy_paths(tmp_path):
 
 
 def test_sheet_sense():
-    from llm.validate import sheet_sense
-    from scan.tmstore import SHEET_HDR
+    from drawtrans.llm.validate import sheet_sense
+    from drawtrans.memory.store import SHEET_HDR
     assert sheet_sense("Лист / Sheet", "钢板") and sheet_sense("Лист", "页") is None
     assert sheet_sense("Лист ⟨1⟩x⟨2⟩", "钢板 ⟨1⟩x⟨2⟩") is None and not SHEET_HDR.fullmatch("Лист ⟨1⟩")
 
 
 # ------------------------------------------------------------------ output-standard gate
 def test_standard_gate_rules():
-    from qa import standard as QS
+    from drawtrans.qa import standard as QS
     ok = [dict(kind="label", pg=1, bb=[10, 30, 50, 36], src=[10, 20, 50, 28], fs=6, std=2),
           dict(kind="column", pg=1, text="1. 说明", fs=9, std=2)]
     assert QS.check(ok)["ok"]
@@ -141,7 +141,7 @@ def _pdf(path, kind):
 
 
 def test_samples_classifier(tmp_path):
-    from pipeline import samples as SM
+    from drawtrans.pipeline import samples as SM
     import pymupdf
     kinds = {}
     for k in ("prose", "table", "drawing"):
@@ -155,7 +155,7 @@ def test_samples_classifier(tmp_path):
 
 
 def test_label_groups():
-    from scan.segments import label_groups
+    from drawtrans.segment.segments import label_groups
     L = [dict(id=1, box=[0.10, 0.100, 0.30, 0.110], text="Бетон класса B20"),
          dict(id=2, box=[0.10, 0.112, 0.28, 0.122], text="для создания уклона"),
          dict(id=3, box=[0.50, 0.300, 0.70, 0.310], text="Узел 1."),
@@ -165,7 +165,7 @@ def test_label_groups():
 
 
 def test_consistency_report():
-    from qa import consistency as QC
+    from drawtrans.qa import consistency as QC
     groups = {"итого": {"小计": [(1, "Итого", "小计")] * 3, "合计": [(5, "Итого", "合计")]},
               "бетон": {"混凝土": [(1, "Бетон", "混凝土")]}}
     rows = QC.report(groups)
@@ -173,7 +173,7 @@ def test_consistency_report():
 
 
 def test_page_notes_normalize():
-    from llm.tasks import page_notes as PN
+    from drawtrans.llm.tasks import page_notes as PN
     out = {"sheet_code": "", "format": "А3х3 (420x891)", "title_ru": "", "title_zh": "尺寸 2,5", "issues": [],
            "notes": [{"no": "1", "ru": "толщина 2,5", "zh": "厚度 2,5"}],
            "labels": [{"ru": "Км1", "zh": "柱 Км7"}, {"ru": "Узел", "zh": "节点"}]}
@@ -184,7 +184,7 @@ def test_page_notes_normalize():
 
 
 def test_notes_reuse_keeps_title_block_only():
-    from pipeline.stages_scan import _notes_reuse
+    from drawtrans.pipeline.stages_scan import _notes_reuse
     notes = ["1. За отметку 0.000 принята отметка чистого пола здания, что соответствует абсолютной отметке"]
 
     def pl(pg, txt):

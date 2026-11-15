@@ -7,9 +7,10 @@ import ezdxf
 import pymupdf
 import pytest
 from conftest import ROOT
-from engine import config, layout
-from engine.pdf_build import build
-from engine.tm import TM
+from drawtrans.config import textroute as config
+from drawtrans.layout import analyse as layout
+from drawtrans.render.text_pdf import build
+from drawtrans.memory.tm import TM
 
 DEMO = ROOT / "demo"
 
@@ -97,9 +98,7 @@ def test_dxf_overlay(cfg, tmp_path):
     (tmp_path / "project.toml").write_text(
         f'[project]\ntm = "{cfg.tm.as_posix()}"\nglossaries = ["{cfg.glossaries[0].as_posix()}"]\n'
         f'review_dir = "review"\noutput_dir = "out"\n', encoding="utf-8")
-    spec = importlib.util.spec_from_file_location("cad_build", ROOT / "scripts" / "cad" / "10_build.py")
-    cad = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(cad)
+    cad = importlib.import_module("drawtrans.cad.build")
     cad.main(["--config", str(tmp_path / "project.toml"), "--dxf", str(src)])
     full = ezdxf.readfile(tmp_path / "out" / "plan_CN.dxf")
     overlay = ezdxf.readfile(tmp_path / "out" / "plan_CN_overlay.dxf")

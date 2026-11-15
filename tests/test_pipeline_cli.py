@@ -7,9 +7,9 @@ import pymupdf
 import pytest
 from conftest import ROOT
 
-from pipeline import cli, cost, doctor, runner, summary  # noqa: E402  (conftest puts scripts/ on sys.path)
-from pipeline.config import JobConfig
-from pipeline.core import Job, Stage, StageError, StageUnavailable
+from drawtrans.pipeline import cli, cost, doctor, runner, summary  # noqa: E402  (conftest puts scripts/ on sys.path)
+from drawtrans.config.job import JobConfig
+from drawtrans.pipeline.core import Job, Stage, StageError, StageUnavailable
 
 DEMO_PDF = ROOT / "demo" / "demo_drawing.pdf"
 
@@ -148,7 +148,7 @@ def test_dry_run_changes_nothing_and_prints_plan(tmp_path):
 
 def test_real_registry_matches_architecture(tmp_path):
     job = make_job(tmp_path, [])
-    from pipeline import stages_scan, stages_text
+    from drawtrans.pipeline import stages_scan, stages_text
     assert [s.name for s in stages_scan.STAGES] == [
         "ocr", "rapid", "segments", "tm", "translate", "notes", "automap", "build", "audit", "audit_review",
         "check", "qa", "visual", "report"]
@@ -163,9 +163,9 @@ def test_real_registry_matches_architecture(tmp_path):
 
 
 def test_missing_llm_module_is_a_clear_error(tmp_path):
-    from pipeline.core import lazy
+    from drawtrans.pipeline.core import lazy
     with pytest.raises(StageUnavailable, match="not available yet"):
-        lazy("scan.no_such_module_yet", "tm")
+        lazy("None", "tm")
 
 
 # ------------------------------------------------------------------ cost
@@ -323,7 +323,7 @@ def test_text_route_translate_writes_validated_batch(tmp_path):
 
 
 def test_split_paragraphs_at_first_line_indent():
-    from engine.pdf_build import split_paragraphs
+    from drawtrans.render.text_pdf import split_paragraphs
     R = pymupdf.Rect
     items = [(R(90, 0, 500, 10), ["a"], None), (R(70, 12, 500, 22), ["b"], None),
              (R(90, 24, 500, 34), ["c"], None), (R(70, 36, 300, 46), ["d"], None), (R(72, 48, 300, 58), ["e"], None)]
@@ -335,7 +335,7 @@ def test_split_paragraphs_at_first_line_indent():
 
 def test_extension_page_widens_and_keeps_original(tmp_path):
     """Running-text page: the original stays, the page grows to the right, Chinese only in the new column."""
-    from engine import extend
+    from drawtrans.layout import extend
     doc = pymupdf.open()
     page = doc.new_page(width=595, height=842)
     page.insert_text((80, 100), "Общие требования к производству работ", fontname="china-s", fontsize=11)
@@ -352,7 +352,7 @@ def test_extension_page_widens_and_keeps_original(tmp_path):
 
 
 def test_scan_prose_paragraphs_join_lines_of_one_paragraph():
-    from scan import prose
+    from drawtrans.segment import prose
     L = [dict(id=1, box=(0.12, 0.30, 0.80, 0.32), text="ПАО и Общество с ограниченной ответственностью обсудили"),
          dict(id=2, box=(0.08, 0.32, 0.80, 0.34), text="график выполнения строительно-монтажных работ и согласовывают"),
          dict(id=3, box=(0.08, 0.34, 0.50, 0.36), text="его в редакции, приложенной к протоколу."),
@@ -366,7 +366,7 @@ def test_scan_prose_paragraphs_join_lines_of_one_paragraph():
 def test_extension_table_rows_keep_row_numbers_and_rules():
     """A ruled table: one entry per row (row number + cells in column order), the row rules are
     continued into the column."""
-    from engine import extend
+    from drawtrans.layout import extend
     doc = pymupdf.open()
     page = doc.new_page(width=595, height=842)
     xs, ys = [70, 100, 300, 500], [100, 130, 160]

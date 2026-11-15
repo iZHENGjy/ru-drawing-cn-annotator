@@ -4,10 +4,10 @@ import time
 
 import pytest
 
-from llm import Session, get_task
-from llm.backends import FakeBackend, Reply
-from llm.session import LEDGER_FIELDS
-from llm import validate as V
+from drawtrans.llm import Session, get_task
+from drawtrans.llm.backends import FakeBackend, Reply
+from drawtrans.llm.session import LEDGER_FIELDS
+from drawtrans.llm import validate as V
 
 
 def pt_payload(items):

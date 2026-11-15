@@ -9,18 +9,21 @@ import subprocess
 import sys
 
 import pymupdf
+from drawtrans.paths import child_env
 import pytest
 from conftest import ROOT
 
 SCRIPTS = ROOT / "scripts"
-sys.path.insert(0, str(SCRIPTS))
-from scan import ctx as C, engine  # noqa: E402
+sys.path.insert(0, str(ROOT / "src"))
+from drawtrans.config import scanroute as C
+from drawtrans.layout import scan_place as engine  # noqa: E402
+
+
+STEPS = {"20_build.py": "drawtrans.render.scan_build", "30_audit.py": "drawtrans.qa.audit"}
 
 
 def load_step(name):
-    spec = importlib.util.spec_from_file_location(name.replace(".py", ""), SCRIPTS / "scan" / name)
-    m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
-    return m
+    return importlib.import_module(STEPS[name])
 
 
 TSV_HEAD = "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n"
@@ -105,7 +108,7 @@ def test_audit_catches_blank_line_until_answered(proj):
             ans.append({"ref": ref, "act": "ok", "why": "test"})
     (ctx.w / "answers" / "audit").mkdir(parents=True, exist_ok=True)
     (ctx.w / "answers" / "audit" / "p01.json").write_text(json.dumps({"items": ans}, ensure_ascii=False), encoding="utf-8")
-    r = subprocess.run([sys.executable, str(SCRIPTS / "scan" / "31_apply_audit.py"), "--config",
+    r = subprocess.run(env=child_env(), args=[sys.executable, "-m", "drawtrans.qa.apply_audit", "--config",
                         str(proj["tmp"] / "project.toml")], capture_output=True, text=True, encoding="utf-8")
     assert r.returncode == 0, r.stdout + r.stderr
     res2 = audit.audit(ctx, 1)
@@ -116,7 +119,7 @@ def test_mark_gate(proj):
     ctx = proj["ctx"]
     m = json.loads(ctx.map(1).read_text(encoding="utf-8"))
     key = next(k for k, v in m["lines"].items() if v)
-    run = lambda: subprocess.run([sys.executable, str(SCRIPTS / "scan" / "50_check.py"), "--config",  # noqa: E731
+    run = lambda: subprocess.run(env=child_env(), args=[sys.executable, "-m", "drawtrans.qa.marks", "--config",  # noqa: E731
                                   str(proj["tmp"] / "project.toml")], capture_output=True, text=True, encoding="utf-8")
     good = dict(m); good["lines"] = dict(m["lines"], **{key: "基础 Фм1.1"})
     ctx.map(1).write_text(json.dumps(good, ensure_ascii=False), encoding="utf-8")

@@ -1,7 +1,7 @@
 import json
 
 import pytest
-from engine.tm import TM, fmt_num, join_lines, make_key
+from drawtrans.memory.tm import TM, fmt_num, join_lines, make_key
 
 
 @pytest.fixture

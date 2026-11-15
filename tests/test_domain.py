@@ -9,7 +9,8 @@ import pytest
 from conftest import ROOT
 from test_scan import load_step, proj  # noqa: F401  (proj: synthetic scan project fixture)
 
-from scan import appendix, engine
+from drawtrans.render import appendix
+from drawtrans.layout import scan_place as engine
 
 
 def ids(hits):
