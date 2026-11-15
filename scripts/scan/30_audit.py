@@ -223,6 +223,24 @@ def packet(ctx, pg, a, auto_skip, fnt):
     return len(cands) + len(conts)
 
 
+_W = {}
+
+
+def _audit_one(config, pg, no_packets):
+    """worker: audit + review packet of one page -> (page, packet items, progress line)."""
+    if "ctx" not in _W:
+        cfg = C.load(config)
+        ctx = C.Ctx(cfg); engine.init(ctx)
+        _W.update(ctx=ctx, skip=make_auto_skip(cfg), fnt=ImageFont.truetype(C.font_file(cfg), 26))
+    ctx = _W["ctx"]
+    res = audit(ctx, pg)
+    nc = 0 if no_packets else packet(ctx, pg, res, _W["skip"], _W["fnt"])
+    raw = len(res["residual"]) + len(res["blank_claimed"]) + len(res["lost"]) + len(res["cont"])
+    msg = (f"p{pg:02d}: 未覆盖 {len(res['residual'])}  空映射 {len(res['blank_claimed'])}  "
+           f"放置失败 {len(res['lost'])}  续行 {len(res['cont'])}  -> 待复核 {nc}") if raw else ""
+    return pg, nc, msg
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--config")
@@ -239,18 +257,20 @@ def main():
             x, _, y = part.partition("-"); pages += list(range(int(x), int(y or x) + 1))
     if not a.pages:
         (ctx.w / "packets" / "_autoskip.log").write_text("", encoding="utf-8")
-    auto_skip = make_auto_skip(cfg)
-    fnt = ImageFont.truetype(C.font_file(cfg), 26)
     total, per = 0, []
-    for pg in pages:
-        if not ctx.lines(pg).exists():
-            continue
-        res = audit(ctx, pg)
-        nc = 0 if a.no_packets else packet(ctx, pg, res, auto_skip, fnt)
-        raw = len(res["residual"]) + len(res["blank_claimed"]) + len(res["lost"]) + len(res["cont"])
-        if raw:
-            print(f"p{pg:02d}: 未覆盖 {len(res['residual'])}  空映射 {len(res['blank_claimed'])}  "
-                  f"放置失败 {len(res['lost'])}  续行 {len(res['cont'])}  -> 待复核 {nc}", flush=True)
+    todo = [pg for pg in pages if ctx.lines(pg).exists()]
+    import os
+    from concurrent.futures import ProcessPoolExecutor
+    nw = int(os.environ.get("RUDRAW_AUDIT_WORKERS") or max(1, min(8, (os.cpu_count() or 2) // 2, len(todo))))
+    conf = str(Path(a.config or "project.toml").resolve())
+    if nw > 1 and len(todo) > 1:                      # pages are independent: one process per page batch
+        with ProcessPoolExecutor(nw) as ex:
+            res_all = list(ex.map(_audit_one, [conf] * len(todo), todo, [a.no_packets] * len(todo)))
+    else:
+        res_all = [_audit_one(conf, pg, a.no_packets) for pg in todo]
+    for pg, nc, msg in res_all:
+        if msg:
+            print(msg, flush=True)
         total += nc
         if nc:
             per.append(pg)

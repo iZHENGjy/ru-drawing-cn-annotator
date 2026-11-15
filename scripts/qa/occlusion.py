@@ -89,6 +89,38 @@ def span_features(box, ti, ru, blue, s):
     return f
 
 
+def _page_rows(out_pdf: str, src_pdf: str, sp: int, off: int, dpi: int):
+    """rows of one source page (worker of analyse; JSON data)."""
+    od, sd = K.open_pdf(out_pdf), K.open_pdf(src_pdf)
+    op = od[sp - 1 + off]
+    spans = K.blue_spans(op)
+    if not spans:
+        return []
+    s = dpi / 72.0
+    ti, ru, bl = page_masks(sd[sp - 1], op, dpi)
+    rows = []
+    for bb, size, text in spans:
+        f = span_features(bb, ti, ru, bl, s)
+        f.update(page=sp + off, src_page=sp, bbox=[round(v, 1) for v in bb], size=round(size, 2), text=text)
+        rows.append(f)
+    for i in range(len(spans)):                       # Chinese on Chinese
+        for j in range(i + 1, len(spans)):
+            if K.box_overlap(spans[i][0], spans[j][0]) > 0.3:
+                rows[i]["zh_overlap"] = rows[j]["zh_overlap"] = True
+    return rows
+
+
+def analyse_fast(out_pdf, src_pdf, dpi=DEFAULTS["dpi"], pages=None, cache_dir=None):
+    """analyse() per page in a process pool, results cached by output-page content (only changed pages run)."""
+    od, sd = K.open_pdf(out_pdf), K.open_pdf(src_pdf)
+    off = K.page_offset(od, sd)
+    sps = list(pages or range(1, sd.page_count + 1))
+    st = Path(str(sd.name)).stat()
+    keys = [K.page_key(od[sp - 1 + off], f"occ|{sd.name}|{st.st_size}|{st.st_mtime_ns}|{sp}|{dpi}") for sp in sps]
+    res, _ = K.cached_map(_page_rows, [(str(od.name), str(sd.name), sp, off, dpi) for sp in sps], keys, cache_dir, "occ")
+    return [r for rows in res for r in rows]
+
+
 def analyse(out_pdf, src_pdf, dpi=DEFAULTS["dpi"], pages=None, progress=False):
     """Per-span features for every blue span of the drawing pages -> list of dicts."""
     od, sd = K.open_pdf(out_pdf), K.open_pdf(src_pdf)
@@ -194,8 +226,11 @@ def score(flagged, todo, min_ov=0.3):
                 missed=[(pg, box, note) for (pg, box, note), ok in zip(todo, found) if not ok])
 
 
-def run(out_pdf, src_pdf, dpi=DEFAULTS["dpi"], pages=None, progress=False, **thr):
-    rows = analyse(out_pdf, src_pdf, dpi, pages, progress)
+def run(out_pdf, src_pdf, dpi=DEFAULTS["dpi"], pages=None, progress=False, cache_dir=None, **thr):
+    if progress:
+        rows = analyse(out_pdf, src_pdf, dpi, pages, progress)
+    else:
+        rows = analyse_fast(out_pdf, src_pdf, dpi, pages, cache_dir)
     fl = flag(rows, **thr)
     return rows, fl
 

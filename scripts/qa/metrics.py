@@ -40,13 +40,15 @@ FLOOR = 6.0          # pt: below this a Chinese span counts as hard to read (see
 SCAN = Path(__file__).resolve().parents[1] / "scan"
 
 
-def text_fingerprints(doc):
-    """(text_sha256, layout_sha256): page texts in order; and blue spans with 0.1 pt boxes."""
+def text_fingerprints(doc, pages=None):
+    """(text_sha256, layout_sha256): page texts in order; and blue spans with 0.1 pt boxes.
+    ``pages``: [(text, spans)] from K.page_texts (cached / parallel), else read from ``doc``."""
     h1, h2 = hashlib.sha256(), hashlib.sha256()
-    for p in doc:
-        h1.update(p.get_text().encode("utf-8")); h1.update(b"\f")
-        for bb, size, text in K.blue_spans(p):
-            h2.update(f"{p.number}|{bb[0]:.1f},{bb[1]:.1f},{bb[2]:.1f},{bb[3]:.1f}|{size:.2f}|{text}\n".encode("utf-8"))
+    pages = pages if pages is not None else [(p.get_text(), K.blue_spans(p)) for p in doc]
+    for n, (txt, spans) in enumerate(pages):
+        h1.update(txt.encode("utf-8")); h1.update(b"\f")
+        for bb, size, text in spans:
+            h2.update(f"{n}|{bb[0]:.1f},{bb[1]:.1f},{bb[2]:.1f},{bb[3]:.1f}|{size:.2f}|{text}\n".encode("utf-8"))
     return h1.hexdigest(), h2.hexdigest()
 
 
@@ -85,7 +87,7 @@ def mark_gate(config: Path | None):
 
 
 def compute(out_pdf, work=None, config=None, src=None, floor=FLOOR, count_word=None, audit_log=None,
-            report_tsv=None, run_check=True, dpi=150):
+            report_tsv=None, run_check=True, dpi=150, cache_dir=None):
     """Metrics dict for one output PDF."""
     t0 = time.time()
     cfg = None
@@ -97,8 +99,9 @@ def compute(out_pdf, work=None, config=None, src=None, floor=FLOOR, count_word=N
         src = src or cfg.pdf
         count_word = count_word or cfg.count_word
     doc = K.open_pdf(out_pdf)
-    text = "".join(p.get_text() for p in doc)
-    sizes = np.array([s for p in doc for _, s, _ in K.blue_spans(p)]) if doc.page_count else np.array([])
+    pt = K.page_texts(out_pdf, cache_dir)                 # one pass per page, parallel, cached by content
+    text = "".join(t for t, _ in pt)
+    sizes = np.array([s for _, sp in pt for _, s, _ in sp]) if doc.page_count else np.array([])
     m = dict(pages=doc.page_count, zh_chars=len(K.CJK.findall(text)),
              n_gen=text.count("根"), n_jian=text.count("件"), spacing=text.count("间距"))
     m["count_label"] = text.count(count_word) if count_word else None
@@ -116,10 +119,10 @@ def compute(out_pdf, work=None, config=None, src=None, floor=FLOOR, count_word=N
     m["floor"] = floor
     m["audit_remaining"] = audit_remaining(work, audit_log)
     m["mark_gate"] = mark_gate(config) if (run_check and config) else None
-    m["text_sha256"], m["layout_sha256"] = text_fingerprints(doc)
+    m["text_sha256"], m["layout_sha256"] = text_fingerprints(doc, pt)
     if src:
         from qa import occlusion as O
-        rows, fl = O.run(out_pdf, src, dpi, floor=floor)
+        rows, fl = O.run(out_pdf, src, dpi, floor=floor, cache_dir=cache_dir)
         for k, v in O.summary(rows, fl).items():
             m["occ_" + k] = v
         m["occ_tiles"] = len(O.tiles(fl))

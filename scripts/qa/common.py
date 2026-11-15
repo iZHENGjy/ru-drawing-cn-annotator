@@ -84,3 +84,68 @@ def box_overlap(a, b) -> float:
     if ix <= 0 or iy <= 0:
         return 0.0
     return ix * iy / max(min((a[2] - a[0]) * (a[3] - a[1]), (b[2] - b[0]) * (b[3] - b[1])), 1e-9)
+
+
+# ---------------------------------------------------------------- per-page cache + process pool
+QA_VERSION = "1"        # bump when a cached per-page result would change
+
+
+def page_key(page, extra: str = "") -> str:
+    """content hash of one output page: content streams, size, rotation, fonts (+ caller's extra)."""
+    import hashlib
+    h = hashlib.sha256()
+    h.update(page.read_contents() or b"")
+    h.update(f"{tuple(page.rect)}|{page.rotation}|{QA_VERSION}|{extra}".encode())
+    h.update(repr(sorted((f[3], f[1]) for f in page.get_fonts())).encode())
+    return h.hexdigest()[:24]
+
+
+def workers(n_jobs: int) -> int:
+    import os
+    if os.environ.get("RUDRAW_QA_WORKERS"):
+        return max(1, int(os.environ["RUDRAW_QA_WORKERS"]))
+    return max(1, min(8, (os.cpu_count() or 2) // 2, n_jobs))
+
+
+def cached_map(fn, jobs: list, keys: list, cache_dir=None, tag: str = ""):
+    """[fn(*job)] with results cached as JSON under cache_dir/<tag>_<key>.json; misses run in a process
+    pool (pages are independent).  fn must be a top-level function returning JSON data."""
+    import json
+    from concurrent.futures import ProcessPoolExecutor
+    out = [None] * len(jobs)
+    todo = []
+    cdir = Path(cache_dir) if cache_dir else None
+    for i, k in enumerate(keys):
+        f = cdir / f"{tag}_{k}.json" if cdir else None
+        if f is not None and f.exists():
+            try:
+                out[i] = json.loads(f.read_text(encoding="utf-8")); continue
+            except ValueError:
+                pass
+        todo.append(i)
+    nw = workers(len(todo))
+    if nw > 1 and len(todo) > 1:
+        with ProcessPoolExecutor(nw) as ex:
+            for i, r in zip(todo, ex.map(fn, *zip(*[jobs[i] for i in todo]))):
+                out[i] = r
+    else:
+        for i in todo:
+            out[i] = fn(*jobs[i])
+    if cdir:
+        cdir.mkdir(parents=True, exist_ok=True)
+        for i in todo:
+            (cdir / f"{tag}_{keys[i]}.json").write_text(json.dumps(out[i], ensure_ascii=False), encoding="utf-8")
+    return out, len(todo)
+
+
+def _text_and_spans(pdf: str, i: int):
+    p = pymupdf.open(pdf)[i]
+    return [p.get_text(), [[list(bb), s, t] for bb, s, t in blue_spans(p)]]
+
+
+def page_texts(out_pdf, cache_dir=None):
+    """[(text, [(bbox, size, text)])] per page of the output PDF (cached, parallel)."""
+    d = open_pdf(out_pdf)
+    keys = [page_key(p) for p in d]
+    res, _ = cached_map(_text_and_spans, [(str(d.name), i) for i in range(d.page_count)], keys, cache_dir, "txt")
+    return [(t, [(tuple(bb), float(s), x) for bb, s, x in sp]) for t, sp in res]

@@ -48,9 +48,24 @@ def run_ocr(sc: StageCtx):
 def run_rapid(sc: StageCtx):
     if importlib.util.find_spec("rapidocr") is None or importlib.util.find_spec("onnxruntime") is None:
         return {"_skip": "rapidocr/onnxruntime not installed (pip install rapidocr onnxruntime); the audit then only sees Tesseract"}
-    sc.run_script("scan/11_rapid.py", sc.config_arg() + sc.pages_args(), check=True)
-    n = len(list(sc.job.ctx.w.joinpath("rapid").glob("p*.tsv")))
-    return {"pages_with_rapid": n}
+    import os
+    from concurrent.futures import ThreadPoolExecutor
+    ctx = sc.job.ctx
+    pages = [p for p in sc.page_list() if not ctx.rapid(p).exists() and ctx.png(p).exists()]
+    cpu = os.cpu_count() or 2
+    nw = int(os.environ.get("RUDRAW_RAPID_WORKERS") or max(1, min(6, cpu // 4, len(pages))))
+    if nw <= 1 or len(pages) <= 1:
+        sc.run_script("scan/11_rapid.py", sc.config_arg() + sc.pages_args(), check=True)
+    else:                                   # one RapidOCR process per page group (pages are independent)
+        groups = [pages[i::nw] for i in range(nw)]
+        thr = str(max(1, cpu // nw))
+        with ThreadPoolExecutor(nw) as ex:
+            rcs = list(ex.map(lambda g: sc.run_script("scan/11_rapid.py", sc.config_arg() + [
+                "--pages", ",".join(map(str, g)), "--threads", thr])[0], groups))
+        if any(rcs):
+            raise StageError(f"11_rapid.py failed in {sum(1 for r in rcs if r)} of {nw} workers (see log)")
+    n = len(list(ctx.w.joinpath("rapid").glob("p*.tsv")))
+    return {"pages_with_rapid": n, "workers": nw}
 
 
 def _seg_file(job):
@@ -192,7 +207,9 @@ def run_audit_review(sc: StageCtx):
         raise StageError("audit has no result yet: run the audit stage first")
     if rem == 0:
         return {"_skip": "audit remaining 0", "remaining": 0}
-    tot = {"loops": 0, "calls": 0, "cached": 0, "cost_usd": 0.0, "apply_problems": 0}
+    tot = {"loops": 0, "calls": 0, "cached": 0, "cost_usd": 0.0, "apply_problems": 0, "refs_skipped_seen": 0}
+    vmod = lazy("llm.validate", "audit_review")
+    seen: dict[int, set] = {}                 # page -> candidate texts already answered in an earlier loop
     for loop in range(1, int(sc.cfg.job["max_audit_loops"]) + 1):
         am = job.metrics("audit")
         pages = am.get("pages") or []
@@ -208,9 +225,22 @@ def run_audit_review(sc: StageCtx):
             imgs = sorted((ctx.w / "packets").glob(f"p{pg:02d}_s*.png"))
             # no absolute paths in the prompt: they would change the cache key between job folders
             pkt = re.sub(r"(?:[A-Za-z]:)?[\\/][^\s「」]*[\\/]([^\\/\s]+\.png)", r"\1", md.read_text(encoding="utf-8"))
-            payloads.append({"data": {"page": pg, "packet": pkt, "refs": list(cands)},
+            refs = list(cands)
+            blocks = vmod.packet_blocks(pkt)
+            key = lambda r: re.sub(r"\s+", " ", blocks.get(r, r)).strip()        # noqa: E731
+            if loop > 1:                         # second loop: only candidates that are new since the last answer
+                new = [r for r in refs if key(r) not in seen.get(pg, set())]
+                tot["refs_skipped_seen"] += len(refs) - len(new)
+                refs = new
+                if not refs:
+                    continue
+            seen.setdefault(pg, set()).update(key(r) for r in refs)
+            payloads.append({"data": {"page": pg, "packet": pkt, "refs": refs},
                              "images": imgs})
             ids.append(f"p{pg:02d}-L{loop}"); pgs.append(pg)
+        if not payloads and loop > 1:
+            sc.log(f"audit_review loop {loop}: every remaining candidate was answered in an earlier loop")
+            break
         if not payloads:
             raise StageError("audit reports remaining items but no packets exist (packets/pNN.md)")
         sc.log(f"audit_review loop {loop}: {len(pgs)} page(s)")
@@ -218,14 +248,28 @@ def run_audit_review(sc: StageCtx):
         adir = ctx.w / "answers" / "audit"
         adir.mkdir(parents=True, exist_ok=True)
         stale = adir / "_stale"
-        for old in adir.glob("p*.json"):                       # answers of pages that no longer have candidates
+        if loop > 1:      # earlier answers stay applied: freeze their fix entries, retire the answer files
+            for old in adir.glob("p*.json"):
+                fx = ctx.fix(int(old.stem[1:]))
+                if fx.exists():
+                    F = json.loads(fx.read_text(encoding="utf-8"))
+                    for k in ("extra", "accept"):
+                        for e in F.get(k) or []:
+                            if e.get("src") == "audit":
+                                e["src"] = f"audit_l{loop - 1}"
+                    fx.write_text(json.dumps(F, ensure_ascii=False, indent=0), encoding="utf-8")
+                stale.mkdir(exist_ok=True)
+                shutil.move(str(old), str(stale / f"{old.stem}.L{loop - 1}.json"))
+        for old in (adir.glob("p*.json") if loop == 1 else []):   # answers of pages that no longer have candidates
             if int(old.stem[1:]) not in pgs:
                 stale.mkdir(exist_ok=True)
                 shutil.move(str(old), str(stale / old.name))
         human = []
-        for pg, r in zip(pgs, results):
+        for pg, r, pl in zip(pgs, results, payloads):
             if r.ok and r.output is not None:
                 out = json.loads(json.dumps(r.output))
+                if loop > 1:
+                    out["asked"] = pl["data"]["refs"]
                 for it in out.get("items") or []:     # "[?]" = reviewer could not read it: a person decides,
                     if it.get("act") == "tr" and "[?]" in (it.get("zh") or ""):   # nothing is drawn
                         human.append("\t".join([f"p{pg:02d}", it.get("ref", ""), it.get("ru", ""), it.get("why", "")]))
@@ -272,10 +316,11 @@ def run_qa(sc: StageCtx):
     if not out_pdf.exists():
         raise StageError(f"{out_pdf} missing: build first")
     src = sc.job.ctx.cfg.pdf
-    rows, flagged = QO.run(str(out_pdf), str(src))
+    qcache = sc.job.job_dir / "qa_cache"            # per-page results keyed by page content: only changed pages run
+    rows, flagged = QO.run(str(out_pdf), str(src), cache_dir=qcache)
     tiles = QO.tiles(flagged)
     m = QM.compute(str(out_pdf), work=sc.job.ctx.w, config=None, src=None,
-                   count_word=sc.job.ctx.cfg.count_word, run_check=False)
+                   count_word=sc.job.ctx.cfg.count_word, run_check=False, cache_dir=qcache)
     m.update({"occ_" + k: v for k, v in QO.summary(rows, flagged).items()})
     m["occ_tiles"] = len(tiles)
     _jf(sc.job, "qa_tiles.json").write_text(json.dumps(tiles, ensure_ascii=False, indent=1), encoding="utf-8")

@@ -39,7 +39,7 @@ def main():
         F["extra"] = [e for e in F.get("extra", []) if e.get("src") != "audit"]
         F["accept"] = [x for x in F.get("accept", []) if x.get("src") != "audit"]
         refs = {it.get("ref") for it in ans.get("items", [])}
-        miss = [k for k in snap["cands"] if k not in refs]
+        miss = [k for k in (ans.get("asked") or snap["cands"]) if k not in refs]   # a later loop asks only new refs
         if miss:
             print(f"!! p{pg:02d}: no answer for {miss}"); bad += 1
         for it in ans.get("items", []):

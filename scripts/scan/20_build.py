@@ -28,14 +28,94 @@ from pypdf import PdfWriter  # noqa: E402
 from scan import ctx as C, engine  # noqa: E402
 
 
-def build(ctx, pages, out_pdf, report_tsv=None, verbose=True):
+CODE_FILES = ["scan/engine.py", "scan/ctx.py", "scan/20_build.py", "i18n.py", "placelog.py"]
+
+
+def _code_hash() -> str:
+    import hashlib
+    h = hashlib.sha256()
+    root = Path(__file__).resolve().parents[1]
+    for f in CODE_FILES:
+        h.update((root / f).read_bytes())
+    return h.hexdigest()[:16]
+
+
+def page_key(ctx, n, code_hash, cfg_text) -> str:
+    """hash of everything annotate() reads for page n: the page is rebuilt only when one of them changes."""
+    import hashlib
+    h = hashlib.sha256(f"{code_hash}|{n}|{engine.OPTS}|{cfg_text}".encode("utf-8"))
+    for f in (ctx.map(n), ctx.fix(n), ctx.f("map", n, ".meta.json"), ctx.notes(n), ctx.lines(n), ctx.ocr(n), ctx.rapid(n)):
+        h.update(f.read_bytes() if f.exists() else b"-")
+        h.update(b"|")
+    return h.hexdigest()[:24]
+
+
+_W = {}
+
+
+def _annotate_one(config, compact, n, cache_file):
+    """worker: annotate one page -> one-page PDF (cached), report rows, placement records, count."""
+    import json
+    import placelog
+    if "ctx" not in _W:
+        cfg = C.load(config)
+        _W["ctx"] = C.Ctx(cfg); engine.init(_W["ctx"])
+    engine.OPTS["compact"] = compact
+    ctx = _W["ctx"]
+    report = []
+    placelog.reset()
+    page, cnt = engine.annotate(ctx.cfg.code, n, C.load_map(ctx, n), C.load_notes(ctx, n), report)
+    w = PdfWriter(); w.add_page(page)
+    buf = io.BytesIO(); w.write(buf)
+    side = {"report": [list(map(str, r)) for r in report], "records": list(placelog.RECORDS), "cnt": cnt}
+    Path(cache_file).parent.mkdir(parents=True, exist_ok=True)
+    Path(cache_file).write_bytes(buf.getvalue())
+    Path(cache_file).with_suffix(".json").write_text(json.dumps(side, ensure_ascii=False), encoding="utf-8")
+    placelog.reset()
+    return n
+
+
+def build(ctx, pages, out_pdf, report_tsv=None, verbose=True, config=None):
+    """Annotate the pages.  With ``config`` the pages run in a process pool and every page is cached in
+    work/review/page_cache by a hash of its inputs, so a rebuild only redoes the pages that changed."""
+    import json
+    import os
+    from concurrent.futures import ProcessPoolExecutor
+    from pypdf import PdfReader
+    import placelog
     report, stats = [], []
     w = PdfWriter()
-    for n in pages:
+    if config is None:
+        for n in pages:
+            t0 = time.time()
+            page, cnt = engine.annotate(ctx.cfg.code, n, C.load_map(ctx, n), C.load_notes(ctx, n), report)
+            w.add_page(page)
+            stats.append(f"{n}:{cnt}({time.time() - t0:.0f}s)")
+    else:
+        code, cfg_text = _code_hash(), Path(config).read_text(encoding="utf-8")
+        cdir = ctx.w / "review" / "page_cache"
+        files = {n: cdir / f"p{n:02d}_{page_key(ctx, n, code, cfg_text)}.pdf" for n in pages}
+        todo = [n for n in pages if not (files[n].exists() and files[n].with_suffix(".json").exists())]
+        nw = int(os.environ.get("RUDRAW_BUILD_WORKERS") or max(1, min(8, (os.cpu_count() or 2) // 2, len(todo))))
         t0 = time.time()
-        page, cnt = engine.annotate(ctx.cfg.code, n, C.load_map(ctx, n), C.load_notes(ctx, n), report)
-        w.add_page(page)
-        stats.append(f"{n}:{cnt}({time.time() - t0:.0f}s)")
+        if nw > 1 and len(todo) > 1:
+            with ProcessPoolExecutor(nw) as ex:
+                list(ex.map(_annotate_one, [str(config)] * len(todo), [engine.OPTS["compact"]] * len(todo), todo,
+                            [str(files[n]) for n in todo]))
+        else:
+            for n in todo:
+                _annotate_one(str(config), engine.OPTS["compact"], n, str(files[n]))
+        for n in pages:
+            side = json.loads(files[n].with_suffix(".json").read_text(encoding="utf-8"))
+            report += [tuple(r) for r in side["report"]]
+            placelog.RECORDS.extend(side["records"])
+            w.add_page(PdfReader(str(files[n])).pages[0])
+            stats.append(f"{n}:{side['cnt']}")
+        keep = {f.name for f in files.values()} | {f.with_suffix(".json").name for f in files.values()}
+        for f in cdir.glob("p*_*.*"):                      # drop stale versions of the pages just built
+            if f.name not in keep and int(f.name[1:3]) in files:
+                f.unlink()
+        stats.append(f"[{len(todo)} rebuilt, {len(pages) - len(todo)} cached, {time.time() - t0:.0f}s]")
     with open(out_pdf, "wb") as fh:
         w.write(fh)
     import placelog
@@ -171,15 +251,16 @@ def main():
     with_appendix, engine.OPTS["compact"] = output_opts(a.config, a)
     cfg = C.load(a.config)
     ctx = C.Ctx(cfg); ctx.mkdirs(); engine.init(ctx)
+    conf = Path(a.config or "project.toml").resolve()
     n = pymupdf.open(cfg.pdf).page_count
     if a.pages:
         pages = []
         for part in a.pages.split(","):
             x, _, y = part.partition("-"); pages += list(range(int(x), int(y or x) + 1))
-        build(ctx, pages, Path(cfg.output) / f"{cfg.code}_test.pdf", ctx.w / "review" / "build_report_test.tsv")
+        build(ctx, pages, Path(cfg.output) / f"{cfg.code}_test.pdf", ctx.w / "review" / "build_report_test.tsv", config=conf)
         return
     body = Path(cfg.output) / f"{cfg.code}_body.pdf"
-    rep = build(ctx, list(range(1, n + 1)), body, ctx.w / "review" / "build_report.tsv")
+    rep = build(ctx, list(range(1, n + 1)), body, ctx.w / "review" / "build_report.tsv", config=conf)
     final = Path(cfg.output) / f"{cfg.code}_中文对照版.pdf"
     if a.no_toc:
         body.replace(final)
