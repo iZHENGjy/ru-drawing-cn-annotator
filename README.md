@@ -25,6 +25,13 @@ keeps the drawing as it is and **adds** the Chinese: blue vector text next to ev
 label, note and table cell (PDF), or a separate `CN_TRANSLATION` layer (DWG/DXF). The result
 prints as one bilingual sheet.
 
+**Other languages.** The language pair is a project setting (`[project] source_lang` / `target_lang`,
+ISO codes): Russian, English, Kazakh, Ukrainian, German, French and Chinese as source or target, e.g.
+`ru→zh` (default), `en→zh`, `kk→zh`, `zh→ru`, `zh→en`, `ru→en`. OCR models, fonts, line breaking, prompts,
+glossaries (`glossary/<src>-<tgt>/`) and the code guards follow the pair; the layout rules stay the same.
+Synthetic demos: `demo/multilang/` (English scan → Chinese, Chinese text layer → English). See
+[docs/pipeline.md](docs/pipeline.md#languages).
+
 ## Production pipeline (one command)
 
 ```bash
