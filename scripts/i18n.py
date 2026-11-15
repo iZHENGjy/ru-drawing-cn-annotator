@@ -91,10 +91,11 @@ GLOSSARY_BASE = {"ru-zh": ["gost_general.json", "spds_sheet_frame.json"],
 
 # words of the target language the engines write themselves (legends, notes headings)
 UI = {
-    "zh": {"tb_legend": "图签译文：", "notes": "说明", "low_conf": "虚线下划线 = 原文识别存疑,请核对", "see": "译文见右侧",
+    "zh": {"tb_legend": "图签译文：", "notes": "说明", "low_conf": "虚线下划线 = 原文识别存疑,请核对", "see": "译文见右侧", "low_legend": "虚线下划线=机器译文,置信度低,待核对",
            "sheet_header": "页"},
     "en": {"tb_legend": "Title block: ", "notes": "Notes", "low_conf": "dotted underline = source text uncertain, check",
-           "see": "translation on the right", "sheet_header": "Sheet"},
+           "see": "translation on the right", "sheet_header": "Sheet",
+           "low_legend": "dotted underline = machine translation, low confidence, check"},
     "ru": {"tb_legend": "Штамп: ", "notes": "Примечания", "low_conf": "пунктир = исходный текст распознан неуверенно",
            "see": "перевод справа", "sheet_header": "Лист"},
 }
@@ -274,6 +275,26 @@ SRC_CHAR = rx(r"[А-Яа-яЁё]")
 SRC_RUN = rx(r"[А-Яа-яЁё]+")
 TGT_CHAR = rx_fn(lambda p: f"[{p.tgt.letters}]")                                   # Chinese: [一-鿿]
 TGT_CHAR_X = rx_fn(lambda p: f"[{p.tgt.letters}]" if p.tgt.script != "hani" else "[㐀-鿿]")   # + CJK ext. A
+
+
+# contents page: (title, sheet, code, name, size) per language
+TOC = {"zh": ("目  录", "页次", "图号", "图名", "图幅"), "ru": ("Содержание", "Лист", "Обозначение", "Наименование", "Формат"),
+       "en": ("Contents", "Sheet", "Drawing No.", "Title", "Size"), "de": ("Inhalt", "Blatt", "Zeichnungsnr.", "Titel", "Format"),
+       "fr": ("Sommaire", "Feuille", "N° de plan", "Titre", "Format"), "kk": ("Мазмұны", "Парақ", "Белгіленуі", "Атауы", "Формат"),
+       "uk": ("Зміст", "Аркуш", "Позначення", "Найменування", "Формат")}
+
+
+def toc_labels() -> list[str]:
+    """[title, sheet, code, name, size]: target label + newline + source label (ru-zh: the original)."""
+    t, s = TOC.get(PAIR.tgt.code, TOC["en"]), TOC.get(PAIR.src.code, TOC["en"])
+    return [a if a == b else a + "\n" + b for a, b in zip(t, s)]
+
+
+def ui_text(key: str, zh: str) -> str:
+    """a string the engine draws itself: ``zh`` for a Chinese target, else the target-language UI text."""
+    if PAIR.tgt.code == "zh":
+        return zh
+    return UI.get(PAIR.tgt.code, UI["en"]).get(key, UI["en"].get(key, zh))
 
 
 def run_letters(p: Pair | None = None) -> str:

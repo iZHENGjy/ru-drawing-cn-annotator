@@ -81,7 +81,7 @@ COVER = {}
 #   compact: do not draw the per-word 根/间距/件 count labels (nor their legend entry)
 OPTS = {"compact": False}
 FRAME_ANYWHERE = {"状态": "Статус", "版次": "Рев.", "状态/版次": "Статус/Рев.", "发布目的": "Назначение выпуска"}
-LOW_LEGEND = "虚线下划线=机器译文,置信度低,待核对"
+LOW_LEGEND = "虚线下划线=机器译文,置信度低,待核对"     # i18n.ui_text("low_legend", ...) at draw time
 FS_K = 1.0   # 中文字号 = 俄文 OCR 行高 × FS_K(≈原文字号 0.92 倍;原 0.72 只有 0.66 倍)
 
 def load_rapid(doc, pg, PW, PH):
@@ -444,7 +444,8 @@ def annotate(doc, pg, mapping, trans, report):
 
     legend = []
     legend_side = None
-    tbl = [d for d in lines if re.search(r"Разраб|Проверил|ГИП|Н\.\s?контр|Стади|Листов|Утвержден|Назначение выпуска|Нач\.\s?отд|Гл\.\s?(констр|спец)" + (("|" + CTX.cfg.title_code_regex) if CTX.cfg.title_code_regex else ""), d["text"])
+    tbl = [d for d in lines if re.search(r"Разраб|Проверил|ГИП|Н\.\s?контр|Стади|Листов|Утвержден|Назначение выпуска|Нач\.\s?отд|Гл\.\s?(констр|спец)" + (("|" + CTX.cfg.title_code_regex) if CTX.cfg.title_code_regex else "")
+                                    + ("" if i18n.pair().src.code == "ru" else "|" + "|".join(re.escape(a) for a in i18n.pair().src.tb_anchors)), d["text"])
            and d["y0"] > PH * (0.78 if big else 0.70) and d["x0"] > PW * (0.40 if big else 0.10)]
     tbbox = None
     if len(tbl) >= 3:
@@ -770,6 +771,8 @@ def annotate(doc, pg, mapping, trans, report):
                 legend.append((ru_, it["zh"].strip(" /")))
             cov["legend"].append(bx)
             continue
+        if key and key != "左侧竖排声明" and i18n.pair().src.code != "ru":    # legend keys in the source language
+            key = re.sub(r"[|_]+", " ", it.get("ru") or "").strip(" .:;,") or key
         if zone and key and not it.get("tiny") and not it.get("stamp"):
             zz = it["zh"].strip(" /")
             if key == "左侧竖排声明":
@@ -803,7 +806,7 @@ def annotate(doc, pg, mapping, trans, report):
         if any(z == "间距" for _, z in toks):
             legend.insert(1, ("ш./sp.", "间距"))
     if any(d[0] == "lbl" and len(d) > 4 and d[4] for d in draws) and (tbbox or not std2):   # 有低置信度译文被画出:对照行写明标记含义
-        legend.append(("", LOW_LEGEND))
+        legend.append(("", i18n.ui_text("low_legend", LOW_LEGEND)))
     if legend:
         seen, ent = set(), []
         for ru, zh in legend:
@@ -811,14 +814,14 @@ def annotate(doc, pg, mapping, trans, report):
             if k in seen:
                 continue
             seen.add(k)
-            if ru and ru not in ("左侧竖排声明", "шт./pcs.", "ш./sp.") and re.search(r"[A-Za-z$|]", ru):
+            if ru and ru not in ("左侧竖排声明", "шт./pcs.", "ш./sp.") and re.search(r"[A-Za-z$|]", ru)                     and i18n.pair().src.script == "cyrl":
                 ru = ""   # OCR 形近乱码键(如 Nogn/Pes)不显示
             if ru == "左侧竖排声明":
                 ent.append(f"左侧竖排声明:{zh}"); continue
             ent.append(zh if (not ru or len(ru) > 30) else f"{ru}={zh}")
         fsL = 8.5 if big else 5.2
         ent = [e[1:] if e.startswith("=") else e for e in ent]
-        txt = "图签译文:" + ";  ".join(ent)
+        txt = i18n.ui_text("tb_legend", "图签译文:") + ";  ".join(ent)
         best = None
         tbw = (tbbox[2] - tbbox[0] - 60) if tbbox else PW * 0.38
         for wf, fk, ink in ((1.0, 1, 0.004), (1.25, 1, 0.004), (0.8, 1, 0.004), (1.0, 0.85, 0.008), (1.4, 0.8, 0.012), (0.7, 0.75, 0.015), (1.8, 0.7, 0.02)):

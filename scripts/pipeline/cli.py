@@ -62,18 +62,21 @@ visual = false                  # LLM visual review of flagged tiles (costly, op
 '''
 
 
-def skeleton(route: str, name: str, pdf_ref: str, code: str) -> str:
+def skeleton(route: str, name: str, pdf_ref: str, code: str, src: str = "ru", tgt: str = "zh") -> str:
+    langs = (f'source_lang = "{src}"              # ISO 639-1: ru en kk uk de fr zh\n'
+             f'target_lang = "{tgt}"\n')
     if route == "scan":
         head = f'''# rudraw project (scanned PDF).  Run:  python <repo>/scripts/rudraw.py doctor / run --dry-run / run
 [project]
 name = "{name}"
 pdf = "{pdf_ref}"
-
+{langs}
 [scan]
 pdf = "{pdf_ref}"
 code = "{code}"                  # short tag for output names
 work = "work"                    # png/ ocr/ lines/ rapid/ notes/ map/ ... and job/ (state, logs, ledger)
 output = "output"
+output_standard = 2              # docs/output_standard.md: labels below, extension column, one title-block legend line
 # tessdata = "tessdata"          # folder with rus.traineddata (tessdata_best) + configs/
 # count_word = "根"               # 件 for embedded items / parts volumes
 # title_code_regex = "^XXXX-"
@@ -89,7 +92,7 @@ acronyms = []
 [project]
 name = "{name}"
 pdf = "{pdf_ref}"
-tm = "dict/tm.json"
+{langs}tm = "dict/tm.json"
 review_dir = "review"
 output_dir = "output"
 extract_dir = "extract"
@@ -109,6 +112,7 @@ def cmd_init(a) -> int:
     if not pdf.is_file():
         print(f"error: PDF not found: {pdf}", file=sys.stderr)
         return 1
+    i18n.activate(a.src, a.tgt)
     info = detect_route(pdf)
     route = a.route if a.route != "auto" else info["route"]
     target = folder / "project.toml"
@@ -117,9 +121,9 @@ def cmd_init(a) -> int:
         return 1
     folder.mkdir(parents=True, exist_ok=True)
     code = a.code or re.sub(r"[^A-Za-z0-9]+", "", pdf.stem)[:8].upper() or "DOC"
-    target.write_text(skeleton(route, a.name or pdf.stem, _pdf_ref(folder, pdf), code), encoding="utf-8")
+    target.write_text(skeleton(route, a.name or pdf.stem, _pdf_ref(folder, pdf), code, a.src, a.tgt), encoding="utf-8")
     print(f"{pdf.name}: {info['pages']} page(s), {info['pages_with_text']}/{info['sampled']} sampled with a text layer, "
-          f"{info['cyrillic_chars']} Cyrillic chars -> route: {route}" + ("  (forced)" if a.route != "auto" else ""))
+          f"{info['cyrillic_chars']} {i18n.pair().src.name} chars ({a.src}->{a.tgt}) -> route: {route}" + ("  (forced)" if a.route != "auto" else ""))
     print(f"wrote {target}\nnext: python scripts/rudraw.py doctor --config {target}\n"
           f"      python scripts/rudraw.py run --dry-run --config {target}")
     return 0
@@ -175,6 +179,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--pdf", required=True)
     p.add_argument("--route", choices=["auto", "scan", "text"], default="auto")
     p.add_argument("--name"); p.add_argument("--code")
+    p.add_argument("--src", default="ru", help="source language (ISO 639-1, default ru)")
+    p.add_argument("--tgt", default="zh", help="target language (default zh)")
     p.add_argument("--force", action="store_true")
     p.set_defaults(fn=cmd_init)
 

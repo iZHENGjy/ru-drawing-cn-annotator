@@ -10,6 +10,7 @@ is set in that column:
 """
 from __future__ import annotations
 from i18n import re_src as re  # source-language patterns (unchanged for ru)
+import i18n
 
 import pymupdf
 
@@ -304,7 +305,7 @@ def layout(entries, legend, PW, PH, fs, colw, align=True):
             out.append((y, t, fs)); y += fs * lh
         y += fs * 0.35
     if legend:
-        txt = LEGEND_HEAD + "；".join(f"{ru} = {zh}" for ru, zh in legend)
+        txt = i18n.ui_text("tb_legend", LEGEND_HEAD) + "；".join(f"{ru} = {zh}" for ru, zh in legend)
         ls = wrap(txt, [colw] * 100, fs * 0.9, hard=True)
         y = max(y + fs * 0.5, PH - 30 - len(ls) * fs * lh)
         for t in ls:

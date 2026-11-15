@@ -18,3 +18,7 @@ projects/
 *.dwl
 *.dwl2
 *.bak
+
+# multilingual demo jobs: only project.toml is kept (run: python scripts/rudraw.py run in the job folder)
+demo/multilang/*_job/*
+!demo/multilang/*_job/project.toml

@@ -65,6 +65,9 @@ def add_toc(ctx, src_pdf, out_pdf):
     PW, PH = A4
     L, R, TOP, BOT = 42, 28, 40, 40
     cols = [("页次\nЛист", 34), ("图号\nОбозначение", 150), ("图名\nНаименование", PW - L - R - 236), ("图幅\nФормат", 52)]
+    if not C.i18n.pair().default:                       # target label + source label of the language pair
+        lab = C.i18n.toc_labels()
+        cols = [(lab[1], 34), (lab[2], 150), (lab[3], PW - L - R - 236), (lab[4], 52)]
     xs = [L]
     for _, cw in cols:
         xs.append(xs[-1] + cw)
@@ -74,8 +77,10 @@ def add_toc(ctx, src_pdf, out_pdf):
     def header(first):
         y = PH - TOP
         if first:
-            c.setFont(F, 15); c.setFillColorRGB(0, 0, 0); c.drawCentredString(PW / 2, y - 14, "目  录")
-            c.setFont(F, 9.5); c.drawCentredString(PW / 2, y - 30, "Содержание / Contents")
+            c.setFont(F, 15); c.setFillColorRGB(0, 0, 0); pr = C.i18n.pair()
+            c.drawCentredString(PW / 2, y - 14, "目  录" if pr.default else C.i18n.TOC.get(pr.tgt.code, C.i18n.TOC["en"])[0])
+            c.setFont(F, 9.5)
+            c.drawCentredString(PW / 2, y - 30, "Содержание / Contents" if pr.default else C.i18n.TOC.get(pr.src.code, C.i18n.TOC["en"])[0])
             c.setFillColorRGB(*engine.BLUE); c.setFont(F, 9)
             c.drawCentredString(PW / 2, y - 46, f"{ctx.cfg.code}  {ctx.cfg.toc_title_zh}")
             c.setFillColorRGB(.35, .35, .35); c.setFont(F, 7.5); c.drawCentredString(PW / 2, y - 58, ctx.cfg.toc_title_ru)
