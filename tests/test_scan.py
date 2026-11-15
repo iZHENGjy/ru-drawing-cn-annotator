@@ -9,15 +9,15 @@ import subprocess
 import sys
 
 import pymupdf
-from drawtrans.paths import child_env
 import pytest
+
 from conftest import ROOT
+from drawtrans.paths import child_env
 
 SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(ROOT / "src"))
-from drawtrans.config import scanroute as C
+from drawtrans.config import scanroute as C  # noqa: E402
 from drawtrans.layout import scan_place as engine  # noqa: E402
-
 
 STEPS = {"20_build.py": "drawtrans.render.scan_build", "30_audit.py": "drawtrans.qa.audit"}
 
@@ -45,7 +45,7 @@ def proj(tmp_path_factory):
         encoding="utf-8")
     cfg = C.load(tmp / "project.toml"); ctx = C.Ctx(cfg); ctx.mkdirs()
     k = 300 / 72
-    rows, rapid = [TSV_HEAD], []
+    rows = [TSV_HEAD]
     words = src.get_text("words") + [(*EXTRA_WORD[0], EXTRA_WORD[1], 999, 0, 0)]
     for i, w in enumerate(words):
         x0, y0, x1, y1, t, b, ln = w[0], w[1], w[2], w[3], w[4], w[5], w[6]

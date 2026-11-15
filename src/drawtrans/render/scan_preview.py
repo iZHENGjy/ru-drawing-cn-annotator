@@ -8,11 +8,10 @@ map/pNN.json.  Keep the long side of one image <= ~2500 px: preview big sheets i
 Without --box a coarse whole-page overview is written.
 """
 import argparse
-import sys
-from pathlib import Path
 
 import pymupdf  # noqa: E402
 from PIL import Image, ImageDraw, ImageFont  # noqa: E402
+
 from drawtrans.config import scanroute as C  # noqa: E402
 
 

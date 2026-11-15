@@ -21,12 +21,12 @@ import csv
 import difflib
 import hashlib
 import json
-from drawtrans.languages import re_src as re  # source-language patterns (unchanged for ru)
 import unicodedata
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from drawtrans import languages as i18n
+from drawtrans.languages import re_src as re  # source-language patterns (unchanged for ru)
 from drawtrans.memory import tm as T
 
 CYR = re.compile(r"[а-яА-ЯёЁ]")

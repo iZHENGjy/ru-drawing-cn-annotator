@@ -6,11 +6,11 @@ import re
 
 import pymupdf
 import pytest
-from conftest import ROOT
-from test_scan import load_step, proj  # noqa: F401  (proj: synthetic scan project fixture)
 
-from drawtrans.render import appendix
+from conftest import ROOT
 from drawtrans.layout import scan_place as engine
+from drawtrans.render import appendix
+from test_scan import load_step, proj  # noqa: F401  (proj: synthetic scan project fixture)
 
 
 def ids(hits):

@@ -15,8 +15,6 @@ work/review/build_report.tsv: one row per decision that is not a plain placement
 import argparse
 import io
 import logging
-import re
-import sys
 import time
 from collections import Counter
 from pathlib import Path
@@ -24,9 +22,9 @@ from pathlib import Path
 logging.getLogger("pypdf").setLevel(logging.ERROR)
 import pymupdf  # noqa: E402
 from pypdf import PdfWriter  # noqa: E402
-from drawtrans.config import scanroute as C
-from drawtrans.layout import scan_place as engine  # noqa: E402
 
+from drawtrans.config import scanroute as C  # noqa: E402
+from drawtrans.layout import scan_place as engine  # noqa: E402
 
 CODE_FILES = ["layout/scan_place.py", "config/scanroute.py", "render/scan_build.py", "languages/__init__.py", "render/placelog.py"]
 
@@ -56,6 +54,7 @@ _W = {}
 def _annotate_one(config, compact, n, cache_file):
     """worker: annotate one page -> one-page PDF (cached), report rows, placement records, count."""
     import json
+
     from drawtrans.render import placelog
     if "ctx" not in _W:
         cfg = C.load(config)
@@ -81,7 +80,9 @@ def build(ctx, pages, out_pdf, report_tsv=None, verbose=True, config=None):
     import json
     import os
     from concurrent.futures import ProcessPoolExecutor
+
     from pypdf import PdfReader
+
     from drawtrans.render import placelog
     report, stats = [], []
     w = PdfWriter()
@@ -135,7 +136,7 @@ def build(ctx, pages, out_pdf, report_tsv=None, verbose=True, config=None):
 def add_toc(ctx, src_pdf, out_pdf):
     """Clickable contents pages (sheet code, Russian + Chinese title, format) + bookmarks.
     Titles come from notes/pNN.json: sheet_code, title_ru, title_zh, format."""
-    import json
+
     from reportlab.lib.pagesizes import A4
     from reportlab.pdfgen import canvas
     F = engine.FONT

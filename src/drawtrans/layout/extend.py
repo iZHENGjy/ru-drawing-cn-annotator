@@ -9,13 +9,13 @@ is set in that column:
 - title-block / margin-stamp fields go into one ``图签译文：`` line (only if the page has them).
 """
 from __future__ import annotations
-from drawtrans.languages import re_src as re  # source-language patterns (unchanged for ru)
-from drawtrans import languages as i18n
 
 import pymupdf
 
+from drawtrans import languages as i18n
+from drawtrans.languages import re_src as re  # source-language patterns (unchanged for ru)
 from drawtrans.layout import place
-from drawtrans.layout.place import Painter, wrap, text_len
+from drawtrans.layout.place import Painter, wrap
 
 CYR = re.compile(r"[А-Яа-яЁё]")
 BREAK_START = re.compile(r"^(?:[-–—•]\s|\d{1,2}(?:\.\d{1,2})*[.)]?\s+[А-ЯЁA-Z«\"]|[а-яё]\)\s)")
@@ -210,7 +210,7 @@ def collect(page, tm, tb):
     # table rows: the cells between the same two horizontal rules (rule positions clustered, so
     # that the cells of one row agree on them even if the rules are drawn piece by piece)
     def snap(vals):
-        out = {}
+        out, prev = {}, 0.0
         for v in sorted(vals):
             out[v] = out[prev] if out and v - prev < 2.0 else v
             prev = v
@@ -240,7 +240,6 @@ def collect(page, tm, tb):
     entries, rules = [], set()
     frame = 0.6 * page.rect.height                          # the sheet frame is not a table rule
     for (top, bot), cells in list(rows.items()):
-        x0 = min(p["rect"].x0 for p, _ in cells)
         vx = sorted(set(snap({x for x, ya, yb in vs if yb - ya < frame
                               and min(yb, bot) - max(ya, top) > 0.6 * (bot - top)}).values()))
         if len(vx) < 2 or all(zh is None for _, zh in cells):   # no cell walls / nothing to translate

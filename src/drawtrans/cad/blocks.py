@@ -2,10 +2,13 @@
 translatable text each contains.  Also prints the unique RU / EN / ZH strings.
 Needs <review>/cad_texts.csv from cad/01_census.py.
 usage: cad/02_blocks.py [--config project.toml] [--dxf in.dxf]"""
-import argparse, csv, sys
+import argparse
+import csv
+import sys
 from collections import Counter, defaultdict
-from pathlib import Path
+
 from ezdxf import recover
+
 from drawtrans.config import textroute as config
 
 ap = argparse.ArgumentParser(description=__doc__)

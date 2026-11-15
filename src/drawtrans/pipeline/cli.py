@@ -1,15 +1,17 @@
 """rudraw command line: doctor | init | run | status | cost."""
 from __future__ import annotations
+
 import argparse
 import re
 import sys
 from pathlib import Path
 
-from . import cost, doctor as doctor_mod
 from drawtrans import languages as i18n
 from drawtrans.config.job import JobConfig
+
+from . import cost, runner
+from . import doctor as doctor_mod
 from .core import Job
-from . import runner
 
 TEXT_MIN_CHARS = 25        # a page with at least this many extractable characters "has a text layer"
 

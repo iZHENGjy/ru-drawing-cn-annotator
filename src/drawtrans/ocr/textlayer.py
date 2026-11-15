@@ -1,11 +1,14 @@
 """Step 1 (survey): extract the words of every page into <extract>/p###.json and write a
 census (page, size, rotation, word count, Cyrillic / Latin word count) to <review>/census.csv.
 usage: 01_extract.py [--config project.toml] [--pdf in.pdf]"""
-import argparse, csv, json, sys
-from pathlib import Path
-from drawtrans.languages import re_src as re  # source-language patterns (unchanged for ru)
+import argparse
+import csv
+import json
+
 import pdfplumber
+
 from drawtrans.config import textroute as config
+from drawtrans.languages import re_src as re  # source-language patterns (unchanged for ru)
 
 CYR = re.compile(r"[А-Яа-яЁё]")
 LAT = re.compile(r"[A-Za-z]")

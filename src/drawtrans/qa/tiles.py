@@ -9,10 +9,10 @@ Reviewers answer per page in work/visual/r<round>/pNN.json (docs/scanned/prompt_
 import argparse
 import json
 import math
-import sys
 from pathlib import Path
 
 import pymupdf  # noqa: E402
+
 from drawtrans.config import scanroute as C  # noqa: E402
 
 

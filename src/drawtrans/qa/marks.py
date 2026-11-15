@@ -14,12 +14,12 @@ Exit code 1 only for mark problems (the hard gate).
 import argparse
 import json
 import sys
-from pathlib import Path
+
+import pymupdf  # noqa: E402
 
 from drawtrans import languages as i18n
-from drawtrans.languages import re_src as re  # source-language patterns (unchanged for ru)
-import pymupdf  # noqa: E402
 from drawtrans.config import scanroute as C
+from drawtrans.languages import re_src as re  # source-language patterns (unchanged for ru)
 from drawtrans.segment import segments as S  # noqa: E402
 
 MARK = i18n.MARK                  # [guard] mark_regex / ГОСТ marks for ru

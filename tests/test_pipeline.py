@@ -6,11 +6,12 @@ from collections import Counter
 import ezdxf
 import pymupdf
 import pytest
+
 from conftest import ROOT
 from drawtrans.config import textroute as config
 from drawtrans.layout import analyse as layout
-from drawtrans.render.text_pdf import build
 from drawtrans.memory.tm import TM
+from drawtrans.render.text_pdf import build
 
 DEMO = ROOT / "demo"
 

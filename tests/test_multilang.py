@@ -141,8 +141,9 @@ def _pdf(path, kind):
 
 
 def test_samples_classifier(tmp_path):
-    from drawtrans.pipeline import samples as SM
     import pymupdf
+
+    from drawtrans.pipeline import samples as SM
     kinds = {}
     for k in ("prose", "table", "drawing"):
         f = tmp_path / f"{k}.pdf"; _pdf(f, k)

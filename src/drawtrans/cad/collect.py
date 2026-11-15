@@ -4,8 +4,11 @@ Item fields: text, x, y (insert point WCS), h (height WCS), rot (deg), halign/va
              lang, path (handle chain), box (approx WCS bounding polygon as Rect if rot ~ 0/90)
 """
 from __future__ import annotations
-import math, re
-from dataclasses import dataclass, field
+
+import math
+import re
+from dataclasses import dataclass
+
 from ezdxf.math import Vec3
 
 CYR = re.compile(r"[А-Яа-яЁё]"); LAT = re.compile(r"[A-Za-z]{2,}"); HAN = re.compile(r"[一-鿿]")

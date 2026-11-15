@@ -7,9 +7,11 @@ be altered by translation.  Decimal commas become points (except inside codes
 such as 2,5-К-1).
 """
 from __future__ import annotations
+
 import json
-from drawtrans.languages import re_src as re  # source-language patterns (unchanged for ru)
 from pathlib import Path
+
+from drawtrans.languages import re_src as re  # source-language patterns (unchanged for ru)
 
 NUM = re.compile(r"\d+(?:[.,]\d+)*")
 PH = re.compile(r"⟨(\d+)⟩")

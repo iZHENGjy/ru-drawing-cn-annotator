@@ -31,3 +31,32 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+src = ["src", "tests"]
+extend-exclude = ["demo"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B", "I"]
+# The placement engines are dense geometry code written with one-line statements and short names
+# (x0, y0, l); these style rules are off on purpose.  Bug classes (F, B) and import order (I) are on.
+ignore = ["E501", "E701", "E702", "E731", "E741", "B007", "B905", "B023"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["F811"]                 # pytest fixtures imported from another test module
+"scripts/*" = ["E402"]               # compatibility entry points set sys.path first
+"src/drawtrans/cad/*" = ["I001"]     # matplotlib.use("Agg") must run before pyplot is imported
+
+[tool.ruff.lint.isort]
+known-first-party = ["drawtrans"]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+follow_imports = "silent"
+# typed core: languages, paths, config schema, shared types, placement record, output-standard gate
+files = ["src/drawtrans/paths.py", "src/drawtrans/types.py", "src/drawtrans/config/schema.py",
+         "src/drawtrans/render/placelog.py", "src/drawtrans/qa/standard.py", "src/drawtrans/pipeline/samples.py",
+         "src/drawtrans/languages/__init__.py"]

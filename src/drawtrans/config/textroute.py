@@ -6,10 +6,10 @@ by default ``project.toml`` in the current directory.  Relative paths in the fil
 resolved against the directory that contains it.  See ``project.example.toml``.
 """
 from __future__ import annotations
+
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
-import sys
 
 from drawtrans import languages as i18n  # noqa: E402
 

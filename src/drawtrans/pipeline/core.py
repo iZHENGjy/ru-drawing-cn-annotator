@@ -1,17 +1,17 @@
 """Stage / Job primitives shared by both routes."""
 from __future__ import annotations
+
 import importlib
-import os
 import subprocess
 import sys
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
 from drawtrans.config.job import JobConfig
-from .state import State, digest, fingerprint
 
+from .state import State, digest, fingerprint
 
 
 class StageError(Exception):

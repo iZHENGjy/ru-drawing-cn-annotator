@@ -1,5 +1,6 @@
 """Cost report from work/job/ledger.jsonl (one row per LLM call attempt)."""
 from __future__ import annotations
+
 import json
 from pathlib import Path
 

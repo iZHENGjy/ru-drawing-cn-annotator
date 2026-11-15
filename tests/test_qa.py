@@ -8,10 +8,12 @@ import sys
 import numpy as np
 import pymupdf
 import pytest
+
 from conftest import ROOT
 
 sys.path.insert(0, str(ROOT / "src"))
-from drawtrans.qa import common as K, determinism, metrics, occlusion, regress  # noqa: E402
+from drawtrans.qa import common as K  # noqa: E402
+from drawtrans.qa import determinism, metrics, occlusion, regress
 
 BLUE = (0x00 / 255, 0x2E / 255, 0xBF / 255)
 W, H, DPI = 420, 300, 150

@@ -22,6 +22,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from drawtrans.paths import REPO  # noqa: E402
+
 HAN = "\u4e00-\u9fff"          # same range as the old [一-鿿]
 
 # CJK fonts (the old engine list, order kept) and fonts for Latin / Cyrillic targets

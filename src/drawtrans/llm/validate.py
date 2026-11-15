@@ -7,9 +7,8 @@ number, member mark, steel grade or standard number that is not in its source te
 """
 from __future__ import annotations
 
-from drawtrans.languages import re_src as re  # source-language patterns (unchanged for ru)
-
 from drawtrans import languages as i18n
+from drawtrans.languages import re_src as re  # source-language patterns (unchanged for ru)
 from drawtrans.memory.tm import NUM, PH, TM
 
 CJK = i18n.TGT_CHAR_X                  # target script ([㐀-鿿] for Chinese)

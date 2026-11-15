@@ -8,12 +8,19 @@ outputs:
 
 Convert DWG -> DXF first (ODA File Converter or LibreDWG's dwg2dxf, see README).
 """
-import argparse, csv, json, math, re, sys
+import argparse
+import csv
+import json
+import math
+import re
+import sys
 from collections import Counter, defaultdict
 from pathlib import Path
+
 import ezdxf
 from ezdxf import recover
-from drawtrans.cad.collect import collect, est_width, lang_of, TItem
+
+from drawtrans.cad.collect import TItem, collect, est_width, lang_of
 from drawtrans.config import textroute as config
 from drawtrans.memory.tm import TM
 
@@ -309,7 +316,6 @@ def main(argv=None):
     for s in segs:
         grid.add(poly_box(s[:2]), ("s", s))
 
-    font_w = 1.0                       # Chinese glyph width / height for simhei at width factor 0.8 -> 0.8
     WF = 0.8
     placed, report2 = [], []
     for p, zh in plan:

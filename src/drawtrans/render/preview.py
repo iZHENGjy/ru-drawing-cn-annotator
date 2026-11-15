@@ -1,6 +1,7 @@
 """Render a page (or a clip of it) of a PDF to PNG for visual QA.
 usage: 30_preview.py <pdf> <page_index_0based> <out.png> [x0,y0,x1,y1 fraction clip | -] [dpi]"""
 import sys
+
 import pymupdf
 
 if len(sys.argv) < 4:

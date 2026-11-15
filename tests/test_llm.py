@@ -5,9 +5,9 @@ import time
 import pytest
 
 from drawtrans.llm import Session, get_task
+from drawtrans.llm import validate as V
 from drawtrans.llm.backends import FakeBackend, Reply
 from drawtrans.llm.session import LEDGER_FIELDS
-from drawtrans.llm import validate as V
 
 
 def pt_payload(items):

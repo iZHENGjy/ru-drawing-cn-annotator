@@ -7,8 +7,11 @@ in <review>/tm_todo.json (see 41_export_todo.py).  The second column is a guard 
 shifted indices.  Write ∅ as the Chinese for "do not translate".
 Every entry is validated (placeholders identical to the key, no bare digits).  Nothing is
 written if any entry fails."""
-import argparse, json, sys
+import argparse
+import json
+import sys
 from pathlib import Path
+
 from drawtrans.config import textroute as config
 from drawtrans.memory.tm import TM
 

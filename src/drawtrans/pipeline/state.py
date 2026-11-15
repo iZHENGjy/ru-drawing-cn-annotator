@@ -1,5 +1,6 @@
 """work/job/state.json: per-stage status + input hash; fingerprints of files."""
 from __future__ import annotations
+
 import hashlib
 import json
 import os

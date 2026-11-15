@@ -1,12 +1,13 @@
 """Quick overview PNG of a DXF: modelspace LINE/LWPOLYLINE geometry in grey, text anchors
 coloured by language (red = Cyrillic, blue = Latin, green = garbled/other).
 usage: cad/04_overview.py <in.dxf> <out.png>"""
-import re, sys
+import re
+import sys
 import numpy as np
 import matplotlib; matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from matplotlib.collections import LineCollection
 from ezdxf import recover
+from matplotlib.collections import LineCollection
 
 if len(sys.argv) < 3:
     sys.exit(__doc__)

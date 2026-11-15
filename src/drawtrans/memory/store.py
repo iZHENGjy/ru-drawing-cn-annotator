@@ -19,16 +19,16 @@ Shared TMs may be in this format or a flat ``{key: zh}`` dict (engine/tm.py form
 from __future__ import annotations
 
 import json
-from drawtrans.languages import re_src as re  # source-language patterns (unchanged for ru)
 import time
 from dataclasses import dataclass
 from pathlib import Path
 
 from drawtrans import languages as i18n
+from drawtrans.languages import re_src as re  # source-language patterns (unchanged for ru)
 from drawtrans.memory import tm as T
+from drawtrans.paths import REPO  # noqa: E402
 from drawtrans.segment import segments as S
 
-from drawtrans.paths import REPO  # noqa: E402
 DEFAULT_GLOSSARY = REPO / "glossary" / "ru-zh" / "gost_general.json"
 DEFAULT_GLOSSARIES = [DEFAULT_GLOSSARY, REPO / "glossary" / "ru-zh" / "spds_sheet_frame.json"]   # ru-zh base layers
 

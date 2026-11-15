@@ -1,8 +1,11 @@
 """Probe: dump the text lines of given pages with bbox, font size, direction and language tag.
 usage: 06_probe_layout.py <pages: 1,3> [max_lines] [--config project.toml] [--pdf in.pdf]"""
-import argparse, re, sys
-from pathlib import Path
+import argparse
+import re
+import sys
+
 import pymupdf
+
 from drawtrans.config import textroute as config
 
 CYR = re.compile(r"[А-Яа-яЁё]"); LAT = re.compile(r"[A-Za-z]{2,}")

@@ -9,7 +9,6 @@ coverage audit (30_audit.py) can prove that each Russian text region was account
 Coordinates: PDF points, top-left origin, visual page orientation.
 """
 import io
-from drawtrans.languages import re_src as re  # source-language patterns (unchanged for ru)
 from collections import defaultdict
 
 import fitz
@@ -20,8 +19,9 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas
 
-from drawtrans.config import scanroute as C
 from drawtrans import languages as i18n
+from drawtrans.config import scanroute as C
+from drawtrans.languages import re_src as re  # source-language patterns (unchanged for ru)
 
 FONT = "ZH"
 BLUE = (0x00 / 255, 0x2E / 255, 0xBF / 255)

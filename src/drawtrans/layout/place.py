@@ -1,14 +1,15 @@
 """Pairing RU->EN runs, computing Chinese slots, fitting and drawing."""
 from __future__ import annotations
-import math, re
-from dataclasses import dataclass, field
-import pymupdf
-from drawtrans.layout.analyse import (Run, Word, digits, needs_replacement, to_frame_rect, from_frame_pt,
-                     from_frame_rect)
 
 import os
+import re
+from dataclasses import dataclass, field
 from pathlib import Path
+
+import pymupdf
+
 from drawtrans import languages as i18n
+from drawtrans.layout.analyse import Run, Word, digits, from_frame_pt, from_frame_rect, needs_replacement, to_frame_rect
 
 # Chinese font: $RUDRAW_FONT, project.toml [project] font, or the first one found here.
 # Last resort is PyMuPDF's built-in CJK font (Droid Sans Fallback).
@@ -208,7 +209,10 @@ def _vov(a, b):
 
 
 # ---------------------------------------------------------------- wrapping
-import jieba, logging
+import logging  # noqa: E402
+
+import jieba  # noqa: E402
+
 jieba.setLogLevel(logging.WARNING)
 # generic structural / title-block terms that must never be split across two lines;
 # project-specific words come from project.toml [segmentation] words

@@ -1,12 +1,13 @@
 """Job configuration: wraps scan/ctx.py's ScanConfig and adds the [llm] / [tm] / [job] tables."""
 from __future__ import annotations
+
+import sys
 import tomllib
 from copy import deepcopy
 from pathlib import Path
 
-import sys
-
 from drawtrans.paths import REPO  # noqa: E402
+
 sys.path.insert(0, str(REPO / "scripts"))
 from drawtrans import languages as i18n  # noqa: E402
 

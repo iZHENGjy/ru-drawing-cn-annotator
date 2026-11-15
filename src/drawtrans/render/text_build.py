@@ -12,12 +12,15 @@ usage:
 
 Reports: <review>/report.csv (per-page QA), <review>/tm_todo.json (untranslated keys)
 """
-import argparse, sys
+import argparse
+import sys
 from pathlib import Path
+
 import pymupdf
+
 from drawtrans.config import textroute as config
-from drawtrans.render.text_pdf import build, parse_pages
 from drawtrans.memory.tm import TM
+from drawtrans.render.text_pdf import build, parse_pages
 
 
 def main(argv=None):

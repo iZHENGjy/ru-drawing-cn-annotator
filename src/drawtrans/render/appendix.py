@@ -12,7 +12,6 @@ Every appendix page carries the disclaimer DISCLAIMER.  Nothing here is ever an 
 """
 import io
 import json
-from drawtrans.languages import re_src as re  # source-language patterns (unchanged for ru)
 from collections import Counter
 from pathlib import Path
 
@@ -21,9 +20,10 @@ from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 
 from drawtrans.config import scanroute as C
+from drawtrans.languages import re_src as re  # source-language patterns (unchanged for ru)
 from drawtrans.layout import scan_place as engine
-
 from drawtrans.paths import GLOSSARY as _G  # noqa: E402
+
 GLOSSARY = _G / "ru-zh"
 DISCLAIMER = "本对照仅供参考,不构成等同替换依据,以设计文件及适用规范为准"
 SECTIONS = [("rebar", "一、钢筋 Арматура"), ("concrete", "二、混凝土强度等级 Классы бетона"),
@@ -113,7 +113,7 @@ def render(hits, code=""):
         c.setFillColorRGB(0, 0, 0); c.setFont(F, 10.5)
         c.drawCentredString(PW / 2, y - 16, f"【{DISCLAIMER}】")
         c.setFont(F, 7.5); c.setFillColorRGB(.3, .3, .3)
-        c.drawString(L, y - 36, f"附录  俄—中材料及规范对照(仅供参考)  Справочное приложение (ориентировочно)" + (f"   {code}" if code else ""))
+        c.drawString(L, y - 36, "附录  俄—中材料及规范对照(仅供参考)  Справочное приложение (ориентировочно)" + (f"   {code}" if code else ""))
         return y - 44
 
     def footer():

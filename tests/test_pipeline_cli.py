@@ -5,10 +5,10 @@ import sys
 
 import pymupdf
 import pytest
-from conftest import ROOT
 
-from drawtrans.pipeline import cli, cost, doctor, runner, summary  # noqa: E402  (conftest puts scripts/ on sys.path)
+from conftest import ROOT
 from drawtrans.config.job import JobConfig
+from drawtrans.pipeline import cli, cost, doctor, runner, summary  # noqa: E402  (conftest puts scripts/ on sys.path)
 from drawtrans.pipeline.core import Job, Stage, StageError, StageUnavailable
 
 DEMO_PDF = ROOT / "demo" / "demo_drawing.pdf"
@@ -71,7 +71,8 @@ def test_input_change_reruns_downstream_only_when_outputs_change(tmp_path):
     assert calls == ["a", "b", "c"]
     calls.clear()
     (tmp_path / "data" / "in.txt").write_text("two", encoding="utf-8")   # same content, new mtime -> a reruns
-    import os, time
+    import os
+    import time
     os.utime(tmp_path / "data" / "in.txt", ns=(time.time_ns() + 10 ** 9,) * 2)
     run(job)
     assert calls[0] == "a"
@@ -147,7 +148,7 @@ def test_dry_run_changes_nothing_and_prints_plan(tmp_path):
 
 
 def test_real_registry_matches_architecture(tmp_path):
-    job = make_job(tmp_path, [])
+    make_job(tmp_path, [])
     from drawtrans.pipeline import stages_scan, stages_text
     assert [s.name for s in stages_scan.STAGES] == [
         "ocr", "rapid", "segments", "tm", "translate", "notes", "automap", "build", "audit", "audit_review",

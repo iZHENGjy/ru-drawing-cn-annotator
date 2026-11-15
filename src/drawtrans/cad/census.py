@@ -1,10 +1,14 @@
 """Census of all text in a DXF (modelspace + block definitions).
 Writes <review>/cad_texts.csv: handle, owner, type, layer, style, height, rotation, x, y, lang, text.
 usage: cad/01_census.py [--config project.toml] [--dxf in.dxf]"""
-import argparse, csv, re, sys
+import argparse
+import csv
+import re
+import sys
 from collections import Counter
-from pathlib import Path
+
 from ezdxf import recover
+
 from drawtrans.config import textroute as config
 
 CYR = re.compile(r"[А-Яа-яЁё]"); LAT = re.compile(r"[A-Za-z]{2,}"); HAN = re.compile(r"[一-鿿]")

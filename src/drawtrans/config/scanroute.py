@@ -15,10 +15,10 @@ Coordinates handed to the engine are PDF points, top-left origin, in the page's 
 orientation (rotation already applied), exactly like ``page.rect`` in PyMuPDF.
 """
 from __future__ import annotations
+
 import csv
 import json
 import os
-from drawtrans.languages import re_src as re  # source-language patterns (unchanged for ru)
 import shutil
 import sys
 import tomllib

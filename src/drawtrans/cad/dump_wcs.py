@@ -1,9 +1,12 @@
 """Dump every visible text item of modelspace in WCS (blocks exploded) -> <review>/cad_wcs.csv.
 usage: cad/03_dump_wcs.py [--config project.toml] [--dxf in.dxf]"""
-import argparse, csv, sys
+import argparse
+import csv
+import sys
 from collections import Counter
-from pathlib import Path
+
 from ezdxf import recover
+
 from drawtrans.cad.collect import collect
 from drawtrans.config import textroute as config
 

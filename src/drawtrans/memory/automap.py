@@ -20,10 +20,10 @@ Count labels (4根 / 间距) are never written: the engine labels шт./pcs and 
 from __future__ import annotations
 
 import json
-from drawtrans import languages as i18n
-from drawtrans.languages import re_src as re  # source-language patterns (unchanged for ru)
 from pathlib import Path
 
+from drawtrans import languages as i18n
+from drawtrans.languages import re_src as re  # source-language patterns (unchanged for ru)
 from drawtrans.segment import packets as K
 from drawtrans.segment import segments as S
 

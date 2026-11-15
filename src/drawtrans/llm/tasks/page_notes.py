@@ -84,6 +84,7 @@ def normalize(payload, output):
     format «А3х3» / «A1 (594x841)» -> A3x3 / A1; decimal commas in Chinese -> points.
     With [job] optimize, labels that still break a code rule are dropped (the audit re-checks the sheet)."""
     import re
+
     from ..validate import DEC_COMMA, check_against
     out = dict(output)
     fmt = str(out.get("format") or "").strip()

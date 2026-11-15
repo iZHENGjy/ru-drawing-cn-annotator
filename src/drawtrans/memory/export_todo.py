@@ -1,7 +1,9 @@
 """Export <review>/tm_todo.json as numbered lines (index, key, first pages) for translation.
 usage: 41_export_todo.py [--config project.toml]   ->  <review>/todo_all.txt"""
-import argparse, json, sys
-from pathlib import Path
+import argparse
+import json
+import sys
+
 from drawtrans.config import textroute as config
 
 ap = argparse.ArgumentParser(description=__doc__)

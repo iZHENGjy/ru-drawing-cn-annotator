@@ -13,10 +13,9 @@ Refuses answers that skip a ref, and Chinese whose digits differ from the Russia
 import argparse
 import json
 import sys
-from pathlib import Path
 
-from drawtrans.languages import re_src as re  # source-language patterns (unchanged for ru)
 from drawtrans.config import scanroute as C  # noqa: E402
+from drawtrans.languages import re_src as re  # source-language patterns (unchanged for ru)
 
 
 def digits(s):

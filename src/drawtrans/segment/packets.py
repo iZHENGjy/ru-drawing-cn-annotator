@@ -15,9 +15,9 @@ Region detection is pure OCR geometry (shared with automap):
 """
 from __future__ import annotations
 
-from drawtrans.languages import re_src as re  # source-language patterns (unchanged for ru)
 from pathlib import Path
 
+from drawtrans.languages import re_src as re  # source-language patterns (unchanged for ru)
 from drawtrans.segment import segments as S
 
 MAXPX = 1568

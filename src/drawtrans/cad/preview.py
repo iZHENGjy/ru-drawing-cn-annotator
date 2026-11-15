@@ -2,12 +2,12 @@
 Chinese (layer CN_TRANSLATION) blue.
 usage: cad/20_preview.py <translated.dxf> <out.png> <x0> <y0> <x1> <y1> [dpi]"""
 import sys
-from pathlib import Path
 import matplotlib; matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from ezdxf import recover
 from matplotlib import font_manager
 from matplotlib.collections import LineCollection
-from ezdxf import recover
+
 from drawtrans.cad.collect import collect
 from drawtrans.layout import place
 

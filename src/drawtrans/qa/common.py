@@ -1,8 +1,6 @@
 """Shared helpers: blue-span extraction, page-offset detection, tiny image-mask utilities."""
 from __future__ import annotations
 
-import re
-import sys
 from pathlib import Path
 
 import numpy as np
@@ -11,6 +9,7 @@ import pymupdf
 # scan/engine.py BLUE = (0x00, 0x2E, 0xBF): colour of every Chinese span the engine draws
 BLUE_RGB = (0x00, 0x2E, 0xBF)
 from drawtrans import languages as i18n  # noqa: E402
+
 CJK = i18n.TGT_CHAR                     # target script (Chinese: the same class as before)
 
 

@@ -12,10 +12,9 @@ Run several processes in parallel for large sets (each page is tiled in 2000 px 
 import argparse
 import sys
 import time
-from pathlib import Path
 
-from drawtrans.config import scanroute as C  # noqa: E402
 from drawtrans import languages as i18n  # noqa: E402
+from drawtrans.config import scanroute as C  # noqa: E402
 
 
 def main():

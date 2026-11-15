@@ -7,9 +7,12 @@ identity frame; upward-running text (dir = (0,-1)) uses (X, Y) = (-y, x).
   chars -> words -> lines -> blocks -> runs (RU / EN) -> pairs
 """
 from __future__ import annotations
+
 import re
 from dataclasses import dataclass, field
+
 import pymupdf
+
 from drawtrans import languages as i18n
 
 CYR = i18n.SRC_CHAR                     # source-script character ([А-Яа-яЁё] for ru)

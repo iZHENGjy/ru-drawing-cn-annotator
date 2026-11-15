@@ -14,17 +14,31 @@ Per page:
 Reports: <review>/report.csv, <review>/tm_todo.json
 """
 from __future__ import annotations
-import csv, json, time
-from drawtrans.languages import re_src as re  # source-language patterns (unchanged for ru)
+
+import csv
+import json
+import time
 from collections import Counter
 from pathlib import Path
+
 import pymupdf
-from drawtrans.layout import extend
-from drawtrans.layout import place
+
 from drawtrans.config.textroute import DEFAULT_TB_ANCHORS
-from drawtrans.layout.analyse import analyse, page_words, to_frame_rect, from_frame_rect, word_lang, Word
-from drawtrans.layout.place import (Obstacles, Painter, pair_runs, en_slots, extra_slots_below, fit, wrap,
-                    text_len, COLOR, Unit)
+from drawtrans.languages import re_src as re  # source-language patterns (unchanged for ru)
+from drawtrans.layout import extend, place
+from drawtrans.layout.analyse import Word, analyse, from_frame_rect, page_words, to_frame_rect, word_lang
+from drawtrans.layout.place import (
+    COLOR,
+    Obstacles,
+    Painter,
+    Unit,
+    en_slots,
+    extra_slots_below,
+    fit,
+    pair_runs,
+    text_len,
+    wrap,
+)
 from drawtrans.memory.tm import TM
 
 CIRCLED = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳"

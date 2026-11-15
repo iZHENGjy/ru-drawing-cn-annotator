@@ -20,14 +20,15 @@ Delivery gate: ``remaining 0``.
 import argparse
 import json
 import logging
-import sys
 from pathlib import Path
 
 from drawtrans.languages import re_src as re  # source-language patterns (unchanged for ru)
+
 logging.getLogger("pypdf").setLevel(logging.ERROR)
 import pymupdf  # noqa: E402
 from PIL import Image, ImageDraw, ImageFont  # noqa: E402
-from drawtrans.config import scanroute as C
+
+from drawtrans.config import scanroute as C  # noqa: E402
 from drawtrans.layout import scan_place as engine  # noqa: E402
 
 CYR = C.CYR

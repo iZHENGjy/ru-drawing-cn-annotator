@@ -1,5 +1,6 @@
 """work/job/run_summary.json: delivery gates, stage table, cost totals (+ cost_report.md/json)."""
 from __future__ import annotations
+
 import json
 
 from . import cost
@@ -22,8 +23,6 @@ def standard_gate(job) -> dict:
     pf = placements_file(job)
     if pf is None:
         return {"value": None, "ok": None, "note": "no placement record yet (build first)"}
-    import sys
-    from pathlib import Path
     from drawtrans.qa import standard as QS
     r = QS.check_file(pf)
     (job.job_dir / "standard.json").write_text(json.dumps(r, ensure_ascii=False, indent=1), encoding="utf-8")

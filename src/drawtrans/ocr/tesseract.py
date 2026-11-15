@@ -9,11 +9,11 @@ delete work/ocr/pNN.tsv to redo a page.  Use tessdata_best (rus) for small drawi
 import argparse
 import os
 import subprocess
-import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pymupdf  # noqa: E402
+
 from drawtrans.config import scanroute as C  # noqa: E402
 
 

@@ -8,6 +8,7 @@ their output; their file names start with digits, so they are not importable as 
 LLM/TM/automap stages import scripts/llm and scripts/scan/{segments,tmstore,packets,automap}.py lazily.
 """
 from __future__ import annotations
+
 import importlib.util
 import json
 import math
@@ -365,7 +366,8 @@ def run_qa(sc: StageCtx):
     if not sc.cfg.job["qa"]:
         return {"_skip": "[job] qa = false"}
     lazy("drawtrans.qa", "qa")
-    from drawtrans.qa import metrics as QM, occlusion as QO
+    from drawtrans.qa import metrics as QM
+    from drawtrans.qa import occlusion as QO
     out_pdf = _out_pdf(sc.job)
     if not out_pdf.exists():
         raise StageError(f"{out_pdf} missing: build first")
@@ -378,7 +380,7 @@ def run_qa(sc: StageCtx):
     m.update({"occ_" + k: v for k, v in QO.summary(rows, flagged).items()})
     m["occ_tiles"] = len(tiles)
     _jf(sc.job, "qa_tiles.json").write_text(json.dumps(tiles, ensure_ascii=False, indent=1), encoding="utf-8")
-    from drawtrans.qa import consistency as QC                # the same source text translated in several ways
+    from drawtrans.qa import consistency as QC  # the same source text translated in several ways
     crows = QC.report(QC.collect(sc.job.ctx))
     QC.write_tsv(crows, sc.job.ctx.w / "review" / "consistency.tsv")
     m["inconsistent_terms"] = len(crows)
@@ -401,6 +403,7 @@ def run_visual(sc: StageCtx):
     if not tiles:
         return {"_skip": "no tiles flagged by qa"}
     import pymupdf
+
     from drawtrans.config import scanroute as C
     out = pymupdf.open(str(_out_pdf(job)))
     vdir = ctx.w / "visual" / "qa"

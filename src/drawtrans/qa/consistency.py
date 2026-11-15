@@ -11,12 +11,9 @@ once in the TM with ``src = human``.
 from __future__ import annotations
 
 import argparse
-import json
 import re
-import sys
 from collections import defaultdict
 from pathlib import Path
-
 
 
 def _mask(z: str) -> str:
@@ -26,8 +23,8 @@ def _mask(z: str) -> str:
 def collect(ctx) -> dict:
     """{key: {masked zh: [(page, source text, zh)]}}"""
     from drawtrans.config import scanroute as C
-    from drawtrans.segment import segments as S
     from drawtrans.memory import tm as T
+    from drawtrans.segment import segments as S
     out: dict = defaultdict(lambda: defaultdict(list))
 
     def add(pg, src, zh):

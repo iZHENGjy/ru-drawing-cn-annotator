@@ -5,13 +5,12 @@ import json
 from pathlib import Path
 
 import pytest
-from conftest import ROOT
 
 from drawtrans.config import scanroute as C
 from drawtrans.memory import automap as A
+from drawtrans.memory import store as TS
 from drawtrans.segment import packets as K
 from drawtrans.segment import segments as S
-from drawtrans.memory import store as TS
 
 W, H = 1240, 1754                     # 300 dpi pixels of a small synthetic sheet
 HEAD = "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n"

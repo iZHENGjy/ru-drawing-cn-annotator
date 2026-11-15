@@ -14,12 +14,11 @@ for a human or a follow-up fix; they are not applied automatically.
 import argparse
 import difflib
 import json
-import sys
-from pathlib import Path
 
-from drawtrans.languages import re_src as re  # source-language patterns (unchanged for ru)
 import pymupdf  # noqa: E402
+
 from drawtrans.config import scanroute as C  # noqa: E402
+from drawtrans.languages import re_src as re  # source-language patterns (unchanged for ru)
 
 TB_FIELDS = ("替代存档号|签字及日期|原件存档号|签字|日期|修改|处数|页|文件号|编制|校核|批准|标准化审查|设计总负责人|"
              "主任专业工程师|部门主任|阶段|总页数|页次|版次|比例|发布目的|状态|会签|版权声明")

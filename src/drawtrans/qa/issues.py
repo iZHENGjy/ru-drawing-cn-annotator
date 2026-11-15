@@ -7,9 +7,14 @@ usage: 43_issues.py [--config project.toml] [--out 问题清单.md] [--product n
           (typos, RU/EN contradictions, terms to confirm with the designer); it is
           inserted as section 二 verbatim.
 """
-import argparse, csv, datetime, re, sys
+import argparse
+import csv
+import datetime
+import re
+import sys
 from collections import defaultdict
 from pathlib import Path
+
 from drawtrans.config import textroute as config
 
 

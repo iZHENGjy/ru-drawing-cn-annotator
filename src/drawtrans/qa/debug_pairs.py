@@ -1,8 +1,10 @@
 """List unpaired multi-line RU runs and EN-only runs of given pages (pairing diagnostics).
 usage: 42_debug_pairs.py <pages: 3,7> [--config project.toml] [--pdf in.pdf]"""
-import argparse, sys
-from pathlib import Path
+import argparse
+import sys
+
 import pymupdf
+
 from drawtrans.config import textroute as config
 from drawtrans.layout.analyse import analyse
 from drawtrans.layout.place import pair_runs

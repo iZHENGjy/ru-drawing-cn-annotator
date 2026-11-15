@@ -5,6 +5,7 @@ subprocess.  translate runs the LLM task phrase_translate over <review>/tm_todo.
 and writes the validated answers to <review>/batch.tsv ([job] batch), which merge_tm merges into the TM.
 """
 from __future__ import annotations
+
 import json
 import re
 from pathlib import Path
@@ -81,7 +82,8 @@ def run_translate(sc: StageCtx):
         b.write_text("", encoding="utf-8")
         return {"todo_items": 0, "calls": 0}
     from drawtrans.memory.tm import TM
-    from .core import summarize_results, lazy
+
+    from .core import lazy, summarize_results
     keys = list(todo)
     items = [{"id": str(i), "key": k, "sample": (v or {}).get("ru", k) if isinstance(v, dict) else k,
               "n": len((v or {}).get("pages") or [1]) if isinstance(v, dict) else 1} for i, (k, v) in enumerate(todo.items())]

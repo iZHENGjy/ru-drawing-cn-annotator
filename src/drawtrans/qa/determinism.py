@@ -16,7 +16,9 @@ import tempfile
 import time
 from pathlib import Path
 
-from drawtrans.qa import common as K, metrics as M  # noqa: E402
+from drawtrans.qa import common as K  # noqa: E402
+from drawtrans.qa import metrics as M
+
 
 def _load_build():
     from drawtrans.render import scan_build
@@ -25,9 +27,10 @@ def _load_build():
 
 def child(config, out_dir, pages):
     """Build into out_dir (own process); writes out.pdf + report.tsv.  Never touches cfg.output / work."""
+    import pymupdf
+
     from drawtrans.config import scanroute as C
     from drawtrans.layout import scan_place as engine
-    import pymupdf
     B = _load_build()
     cfg = C.load(config)
     out_dir = Path(out_dir); out_dir.mkdir(parents=True, exist_ok=True)
