@@ -296,7 +296,8 @@ def _dots(c, x, y, w):
     c.restoreState()
 
 
-def annotate(doc, pg, mapping, trans, report):
+def annotate(doc, pg, mapping, trans, report, _v2_col=False):
+    _rec0, _rep0 = len(placelog.RECORDS), len(report)
     reader = PdfReader(str(CTX.cfg.pdf))
     # pypdf >= 7 only edits content streams of pages that belong to a writer
     page = PdfWriter().add_page(reader.pages[pg - 1])
@@ -790,7 +791,7 @@ def annotate(doc, pg, mapping, trans, report):
         from drawtrans.layout import scan_v2
         _sp = fitz.open(CTX.cfg.pdf)[pg - 1]
         _boxes = list({id(b): b for v in pl.obs.values() for b in v}.values())
-        _need_col = bool(prose_col)
+        _need_col = bool(prose_col) or _v2_col
         for _pass in (0, 1):
             scale3 = scan_v2.page_scale(PW, PH, big, _need_col)
             _mark = len(placelog.RECORDS)
@@ -954,6 +955,8 @@ def annotate(doc, pg, mapping, trans, report):
     # 无图面空白 → 右侧加宽对照栏,逐条与俄文条号对齐
     if widen_items:
         colw = (PW * 0.62) if not big else min(PW * 0.3, 900)
+        if std3:
+            colw = scan_v2.column_width(PW, big)
         extra_w = colw + 20
         X = PW + 14
         ylim = (tbbox[1] if tbbox else PH) - 4
@@ -1021,7 +1024,7 @@ def annotate(doc, pg, mapping, trans, report):
         fsP = 12.0 if big else 9.0
         if std3:
             fsP = scan_v2.V2.pt(scan_v2.V2.column_pref, scale3)
-        for scale in ((1.0, 0.94, 0.89) if not std3 else (1.0, 0.86, scan_v2.V2.column_floor / scan_v2.V2.column_pref)):
+        for scale in ((1.0, 0.94, 0.89) if not std3 else (1.0, 0.89, 0.8, scan_v2.V2.column_floor / scan_v2.V2.column_pref)):
             f = fsP * scale; out = []; ycur = 18.0
             for top, zh in sorted(prose_col):
                 ls = wrap(zh, f, colw - 10); hh = len(ls) * f * 1.3
@@ -1042,6 +1045,8 @@ def annotate(doc, pg, mapping, trans, report):
         if std3:
             fsL = scan_v2.V2.pt(scan_v2.V2.legend_floor, scale3)
         colw2 = (PW * 0.62) if not big else min(PW * 0.3, 900)
+        if std3:
+            colw2 = scan_v2.column_width(PW, big)
         if not extra_w:
             extra_w = colw2 + 20
         lsL = wrap(legend_side, fsL, extra_w - 30)
@@ -1062,6 +1067,10 @@ def annotate(doc, pg, mapping, trans, report):
                 yy = g1 - hL
         for t in lsL:
             draws.append(("txt", PW + 14, yy, t, fsL)); yy += fsL * 1.3
+
+    if std3 and extra_w and not _need_col:          # the page got a column after the labels were sized:
+        del placelog.RECORDS[_rec0:]; del report[_rep0:]   # it prints smaller, so place everything again
+        return annotate(doc, pg, mapping, trans, report, _v2_col=True)
 
     # ---- placement record for the output-standard gates (qa/standard.py); the PDF is not affected
     std_ = 3 if std3 else (2 if std2 else 1)
@@ -1132,7 +1141,7 @@ def annotate(doc, pg, mapping, trans, report):
     if extra_w:
         c.setLineWidth(0.6)
         c.line(PW + 4, 10, PW + 4, PH - 10)
-        c.setFont(FONT, 9 if big else 6.5)
+        c.setFont(FONT, (9 if big else 6.5) if not std3 else scan_v2.V2.pt(scan_v2.V2.column_floor, scale3))
         c.drawString(PW + 14, 8, "← 左侧俄文段落的中文对照(逐段对齐)" if prose_col else
                      "← 左侧俄文说明条文的中文对照(逐条对齐)" if widen_items else "← 左侧图签栏目的中文对照")
     c.save(); buf.seek(0)

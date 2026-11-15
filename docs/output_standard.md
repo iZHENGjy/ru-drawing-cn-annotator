@@ -91,3 +91,37 @@ and the legend words (`图签译文：` / `Title block:` …) follow the target 
 | extension column, paragraphs, contents, tables | `layout/extend.py` (pages in `[project] notes_pages`) | `segment/prose.py` paragraphs, `layout/scan_place.py` widened column (`output_standard = 2`) |
 | labels below the Russian | `layout/place.py` | `layout/scan_place.py` (never above with `output_standard = 2`) |
 | `图签译文` line | `layout/extend.py` | `layout/scan_place.py` legend (title-block texts read whole by `page_notes` replace OCR fragments) |
+
+## 8. Standard v2 (`[scan] output_standard = 3`) — numbers
+
+Not the default yet (it needs the user's approval of the sample pages). Earlier deliveries keep their
+standard and rebuild byte for byte. Every number below is `drawtrans.layout.policy.V2`; the engine
+(`layout/core.py`) and the gate (`qa/standard.py`, `qa/occlusion.py`) read the same object
+(`tests/test_layout_core.py::test_policy_matches_qa`).
+
+**Sizes are printed sizes.** A drawing prints on A3, a document (long side ≤ 900 pt) on A4, in the page's
+orientation, fitting both sides; a page widened by the column prints smaller. PDF size = printed size ÷
+print factor (`Policy.scale`).
+
+| rule | value |
+|---|---|
+| label floor | 6 pt printed, hard: no label is drawn smaller |
+| preferred minimum | 7 pt printed; at most 5 % of a page's labels below it (per-page budget) |
+| label size | 0.95 × source, at least the preferred minimum (+1.5 % margin) |
+| shrinking | at most to 0.8 × the preferred size; sizes ≥ 7 pt first, then wrapping (≤ 3 lines), then sizes < 7 pt, then a leader, then the numbered column |
+| order of places | below the source (titles centred) → below, shifted down ≤ 4 source lines → right / left → (smaller) → wrapped → leader → numbered |
+| never | above the source (labels); on a rule; on source ink |
+| rule clearance | max(0.5 pt, 0.10 × size) on all four sides, from a 150 dpi raster: rules are dark runs ≥ 8 px, dashed rules (gaps ≤ 3 px) included, boxes not inset |
+| ink | ≤ 3 % source ink inside the box (QA `ink_box`), ≤ 15 % under the glyphs (QA `ink_glyph`) |
+| between translations | 1.2 pt |
+| choice | all candidates of a tier are scored (distance, size loss, wrapping, closeness to rules, ink); the lowest score of the lowest tier wins |
+| leaders | ≤ 5 per page; ≤ 30 pt (pages up to A2), ≤ 60 pt (A1 and larger); end points on the two boxes' nearest edges; the segment crosses no word box, no translation and ≤ 10 % source ink; volume share ≤ 3 %, mean ≤ 15 pt |
+| approval stamp | one line outside the stamp (below, above, right, left), ≥ 7 pt printed; else into the legend line |
+| title-block legend | in the free band right above the title block, else outside the frame along its lower edge, ≥ 6.5 pt printed (7.5 preferred), line spacing 1.2; else at the bottom of the column |
+| no place left | a number ①…⑩, (11)… next to the source, the translation under that number in the extension column at the source's height (without a number the entry starts with the source text) |
+| extension column | 0.35 × page width (≤ 900 pt), 9 pt printed, steps 0.89 / 0.8 down to 6.5 pt |
+| count labels (шт./pcs.) | placed when there is room; otherwise only the legend explains them |
+
+QA under standard 3 (gate `output_standard`): `font_floor` (printed size by role), `occlusion` (rule pixels or
+ink in the placed box), `leader` (length, count per page, volume share and mean), `above`, `title_block_cell`.
+The visual review samples QA tiles evenly over the pages (`pipeline.stages_scan.sample_tiles`).

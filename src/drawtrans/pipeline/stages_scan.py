@@ -390,6 +390,23 @@ def run_qa(sc: StageCtx):
             **{f"m_{k}": v for k, v in m.items() if isinstance(v, (int, float)) and not isinstance(v, bool)}}
 
 
+def sample_tiles(tiles: list, cap: int) -> list:
+    """Visual-review sample spread over the pages: round-robin, each page's worst tiles first (ink / rule before
+    tiny-only), instead of the first ``cap`` tiles of the volume (which left whole pages unseen)."""
+    by: dict = {}
+    for t in tiles:
+        by.setdefault(t["src_page"], []).append(t)
+    for v in by.values():
+        v.sort(key=lambda t: (not ({"ink", "rule"} & set(t["flags"])), -len(t["flags"]), -t.get("n", 1)))
+    out, k = [], 0
+    while len(out) < cap and any(k < len(v) for v in by.values()):
+        for pg in sorted(by):
+            if k < len(by[pg]) and len(out) < cap:
+                out.append(by[pg][k])
+        k += 1
+    return out
+
+
 def run_visual(sc: StageCtx):
     """LLM look at the QA-flagged tiles only (not every page).  Findings -> work/visual/qa/_todo.tsv for
     a human (遮挡 / 错译) — report-only; 漏译 is counted as a gate warning."""
@@ -399,7 +416,7 @@ def run_visual(sc: StageCtx):
     tf = _jf(job, "qa_tiles.json")
     tiles = json.loads(tf.read_text(encoding="utf-8")) if tf.exists() else []
     cap = int(sc.cfg.job.get("visual_max_tiles", 60) or 60)
-    tiles = sorted(tiles, key=lambda t: (-len(t["flags"]), -t.get("n", 1), t["src_page"]))[:cap]
+    tiles = sample_tiles(tiles, cap)
     if not tiles:
         return {"_skip": "no tiles flagged by qa"}
     import pymupdf

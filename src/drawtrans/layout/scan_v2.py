@@ -45,6 +45,7 @@ def place_items(items, eng: core.Engine, pl, pg, hmed, big, cov, draws, low_key=
     boxes = eng.b.boxes
     order = sorted(items, key=lambda it: (-_crowd(it["box"], boxes), round(it["box"][1] / 4), it["box"][0]))
     done, fallback, legend_extra = [], [], []
+    eng.set_budget(sum(1 for it in items if not it.get("tiny") and not it.get("stamp")))
     for it in order:
         x0, y0, x1, y1 = it["box"]
         lh = max(y1 - y0, 4.0)

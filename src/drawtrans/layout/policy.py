@@ -34,6 +34,7 @@ class Policy:
     stamp_floor: float = 7.0          # approval-stamp translation, one line outside the stamp
     line_pitch: float = 1.18          # label line spacing (renderer baseline 0.92 fs)
     max_label_lines: int = 3
+    print_margin: float = 1.015       # sizes aimed 1.5 % above a printed limit (page widths round)
     # ---- clearances (PDF pt unless noted)
     gap_below: float = 0.15           # x fs between source and translation
     gap_placed: float = 1.2           # between two translations

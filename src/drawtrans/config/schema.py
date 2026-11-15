@@ -34,7 +34,7 @@ def _scan_keys() -> dict[str, Key]:
                                     else FLOAT if name == "float" else STR)
         out[f.name] = Key(ty or STR)
     out["pdf"] = out["work"] = out["output"] = out["font"] = out["tesseract"] = out["tessdata"] = Key(STR)
-    out["output_standard"] = Key(INT, "1 = approved legacy layout, 2 = docs/output_standard.md", (1, 2))
+    out["output_standard"] = Key(INT, "1 = approved legacy layout, 2 = docs/output_standard.md, 3 = v2 (§8, layout.policy)", (1, 2, 3))
     return out
 
 

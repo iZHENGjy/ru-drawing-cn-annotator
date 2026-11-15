@@ -28,7 +28,8 @@ from pypdf import PdfWriter  # noqa: E402
 from drawtrans.config import scanroute as C  # noqa: E402
 from drawtrans.layout import scan_place as engine  # noqa: E402
 
-CODE_FILES = ["layout/scan_place.py", "config/scanroute.py", "render/scan_build.py", "languages/__init__.py", "render/placelog.py"]
+CODE_FILES = ["layout/scan_place.py", "layout/scan_v2.py", "layout/core.py", "layout/policy.py", "layout/place.py",
+              "config/scanroute.py", "render/scan_build.py", "languages/__init__.py", "render/placelog.py"]
 
 
 def _code_hash() -> str:

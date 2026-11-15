@@ -119,7 +119,7 @@ def test_r16_deterministic():
 
 
 def test_marker():
-    assert core.marker(1) == "①" and core.marker(20) == "⑳" and core.marker(21) == "(21)"
+    assert core.marker(1) == "①" and core.marker(10) == "⑩" and core.marker(11) == "(11)"
 
 
 def test_policy_matches_qa():
@@ -129,3 +129,11 @@ def test_policy_matches_qa():
     assert standard.LEADER_MAX_SMALL == V2.leader_max_small and standard.LEADERS_PER_PAGE == V2.leaders_per_page
     assert occlusion.V2_THRESHOLDS["ink_box"] == V2.ink_box and occlusion.V2_THRESHOLDS["ink_glyph"] == V2.ink_glyph
     assert occlusion.V2_THRESHOLDS["dpi"] == V2.raster_dpi
+
+
+def test_visual_review_sample_covers_every_page():
+    from drawtrans.pipeline.stages_scan import sample_tiles
+    tiles = [{"src_page": 1, "flags": ["tiny"], "n": 1}] * 50 + [{"src_page": 2, "flags": ["rule"], "n": 1},
+                                                                 {"src_page": 3, "flags": ["ink"], "n": 1}]
+    got = sample_tiles(tiles, 6)
+    assert {t["src_page"] for t in got} == {1, 2, 3} and len(got) == 6

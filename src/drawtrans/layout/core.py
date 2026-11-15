@@ -258,12 +258,19 @@ class Engine:
         self.b, self.m, self.P, self.s = board, metrics, policy, scale
         self.leaders = 0
         self.lmax = policy.leader_max(board.W, board.H)
+        self.small_budget = 10 ** 9           # labels allowed below the preferred minimum (set_budget)
+        self.small_used = 0
+
+    def set_budget(self, n_labels: int):
+        """at most policy.small_share_max of the page's labels may print below label_pref_min (7 pt)."""
+        self.small_budget = int(self.P.small_share_max * n_labels)
 
     def sizes(self, src: Source) -> list[float]:
         P = self.P
         floor = P.pt(P.stamp_floor if src.kind == "stamp" else P.label_floor, self.s)
-        pref = max(P.label_ratio * src.size, P.pt(P.stamp_floor if src.kind == "stamp" else P.label_pref_min, self.s))
-        out = []
+        pref = max(P.label_ratio * src.size,
+                   P.pt(P.stamp_floor if src.kind == "stamp" else P.label_pref_min, self.s) * P.print_margin)
+        out: list[float] = []
         for k in P.shrink_steps:
             f = pref * k
             if f < floor - 1e-6:
@@ -284,8 +291,10 @@ class Engine:
         sizes = self.sizes(src)
         lh = max(r[3] - r[1], 4.0)
         title = src.kind == "title"
+        pref_min = P.pt(P.label_pref_min, self.s) - 1e-6
         for si, fs in enumerate(sizes):
             shrink = si > 0
+            small = fs < pref_min                             # prints below 7 pt: only after wrapping at >= 7 pt
             for nl in range(1, P.max_label_lines + 1):
                 if nl == 1:
                     layouts = [[src.zh]]
@@ -296,7 +305,10 @@ class Engine:
                     w = max(self.m.width(t, fs) for t in ls)
                     h = len(ls) * fs * P.line_pitch
                     gap = P.gap_below * fs
-                    tier_base = 4 if nl > 1 else (3 if shrink else 0)
+                    if small:
+                        tier_base = 6 if nl > 1 else 5
+                    else:
+                        tier_base = 4 if nl > 1 else (3 if shrink else 0)
                     x_below = (r[0] + r[2]) / 2 - w / 2 if title else r[0]
                     yield (tier_base if tier_base else 0, "below", (x_below, r[3] + gap, x_below + w, r[3] + gap + h), ls, fs)
                     for k in range(1, P.shift_lines + 1):
@@ -340,15 +352,19 @@ class Engine:
             sc, parts = self._score(src, rect, ls, fs, sizes)
             if tier not in best or sc < best[tier].score:
                 best[tier] = Cand(rect, list(ls), fs, tier, mode, None, sc, parts)
+        if self.small_used >= self.small_budget:          # share of sub-7 pt labels used up: move instead
+            best = {t: c for t, c in best.items() if t < 5}
         if best:
             c = best[min(best)]
             self.b.commit(c.rect)
+            if c.tier in (5, 6):
+                self.small_used += 1
             return Placement(src, "placed", c)
-        c = self._leader(src, sizes, extra_obstacles)
-        if c is not None:
-            self.b.commit(c.rect)
+        lc = self._leader(src, sizes, extra_obstacles)
+        if lc is not None:
+            self.b.commit(lc.rect)
             self.leaders += 1
-            return Placement(src, "placed", c)
+            return Placement(src, "placed", lc)
         return Placement(src, "column", None, ",".join(f"{k}:{v}" for k, v in sorted(reasons.items())))
 
     def _leader(self, src: Source, sizes, extra_obstacles) -> Cand | None:
@@ -357,7 +373,8 @@ class Engine:
             return None
         r = src.rect
         best = None
-        for fs in sizes[:2]:
+        pref_min = P.pt(P.label_pref_min, self.s) - 1e-6
+        for fs in [f for f in sizes[:2] if f >= pref_min] or sizes[:1]:
             for nl in (1, 2):
                 ls = [src.zh] if nl == 1 else self.m.wrap(src.zh, max(r[2] - r[0], 6 * fs), fs, 2)
                 if not ls:
@@ -379,15 +396,15 @@ class Engine:
                             continue
                         if not self.b.segment_ok(pa, pb, ignore=(r, rect)):
                             continue
-                        best = (L, Cand(rect, list(ls), fs, 5, "leader", (pa, pb), L / max(src.size, 1), {"leader": round(L, 1)}))
+                        best = (L, Cand(rect, list(ls), fs, 7, "leader", (pa, pb), L / max(src.size, 1), {"leader": round(L, 1)}))
             if best:
                 break
         return best[1] if best else None
 
 
-CIRCLED = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳"
+CIRCLED = "①②③④⑤⑥⑦⑧⑨⑩"          # CJK fonts (Deng, SimHei) have no glyphs beyond ⑩
 
 
 def marker(n: int) -> str:
-    """①…⑳, then (21) (22) …"""
+    """①…⑩, then (11) (12) …"""
     return CIRCLED[n - 1] if 1 <= n <= len(CIRCLED) else f"({n})"
