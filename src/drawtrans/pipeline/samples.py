@@ -60,7 +60,8 @@ def choose(pdf: Path, max_pages: int | None = None, scanned: bool = False) -> di
     """{kind: page number} — the first page of each kind (page 1 only if nothing else has that kind)."""
     import pymupdf
     doc = pymupdf.open(pdf)
-    kinds, feats = {}, {}
+    kinds: dict[str, int] = {}
+    feats: dict[int, dict] = {}
     for i in range(doc.page_count if max_pages is None else min(doc.page_count, max_pages)):
         pg = doc[i]
         has_text = len((pg.get_text() or "").strip()) >= 25
@@ -90,7 +91,8 @@ def latest_partial_pdf(job) -> Path | None:
     out = Path(job.cfg.scan.output) if job.cfg.route == "scan" else job.cfg.text_dir("output_dir", "output")
     fs = sorted(Path(out).glob("*.pdf"), key=lambda p: p.stat().st_mtime)
     test = [p for p in fs if "_test" in p.stem]
-    return (test or fs or [None])[-1]
+    pick = test or fs
+    return pick[-1] if pick else None
 
 
 def export_png(job, pages: dict, pdf: Path, dpi: int = 110) -> list[str]:

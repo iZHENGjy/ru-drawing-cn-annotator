@@ -90,6 +90,7 @@ def test_toc_pages_and_links(proj):
     assert d.page_count == k + 1 and d[0].get_links()[0]["page"] == k
 
 
+@pytest.mark.e2e
 def test_audit_catches_blank_line_until_answered(proj):
     audit = load_step("30_audit.py")
     ctx = proj["ctx"]
@@ -115,6 +116,7 @@ def test_audit_catches_blank_line_until_answered(proj):
     assert not res2["residual"] and not res2["blank_claimed"] and not res2["lost"], res2
 
 
+@pytest.mark.e2e
 def test_mark_gate(proj):
     ctx = proj["ctx"]
     m = json.loads(ctx.map(1).read_text(encoding="utf-8"))

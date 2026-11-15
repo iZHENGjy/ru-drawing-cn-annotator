@@ -249,6 +249,6 @@ def main(argv=None) -> int:
     a = build_parser().parse_args(argv)
     try:
         return int(a.fn(a) or 0)
-    except FileNotFoundError as e:
+    except (FileNotFoundError, ValueError) as e:      # missing file, project.toml problems (config.schema)
         print(f"error: {e}", file=sys.stderr)
         return 1

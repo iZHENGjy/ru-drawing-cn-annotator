@@ -14,6 +14,7 @@ import sys
 import time
 
 from drawtrans import languages as i18n  # noqa: E402
+from drawtrans import pagesel
 from drawtrans.config import scanroute as C  # noqa: E402
 
 
@@ -44,9 +45,7 @@ def main():
     pngs = sorted(ctx.w.joinpath("png").glob("p*.png"))
     want = None
     if a.pages:
-        want = set()
-        for part in a.pages.split(","):
-            x, _, y = part.partition("-"); want |= set(range(int(x), int(y or x) + 1))
+        want = set(pagesel.expand(a.pages))
     for png in pngs:
         pg = int(png.stem[1:])
         if (want and pg not in want) or ctx.rapid(pg).exists():

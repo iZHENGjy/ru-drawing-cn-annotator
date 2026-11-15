@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
+from drawtrans import pagesel
 from drawtrans.config.job import JobConfig
 
 from .state import State, digest, fingerprint
@@ -35,13 +36,7 @@ def lazy(module: str, stage: str = ""):
 def parse_pages(s: str | None, n: int) -> list[int]:
     if not s:
         return list(range(1, n + 1))
-    out: list[int] = []
-    for part in str(s).split(","):
-        part = part.strip()
-        if not part:
-            continue
-        a, _, b = part.partition("-")
-        out += list(range(int(a), int(b or a) + 1))
+    out = pagesel.expand(s)
     return sorted({p for p in out if 1 <= p <= n}) if n else sorted(set(out))
 
 

@@ -19,6 +19,8 @@ import time
 from collections import Counter
 from pathlib import Path
 
+from drawtrans import pagesel
+
 logging.getLogger("pypdf").setLevel(logging.ERROR)
 import pymupdf  # noqa: E402
 from pypdf import PdfWriter  # noqa: E402
@@ -255,9 +257,7 @@ def main():
     conf = Path(a.config or "project.toml").resolve()
     n = pymupdf.open(cfg.pdf).page_count
     if a.pages:
-        pages = []
-        for part in a.pages.split(","):
-            x, _, y = part.partition("-"); pages += list(range(int(x), int(y or x) + 1))
+        pages = pagesel.expand(a.pages)
         build(ctx, pages, Path(cfg.output) / f"{cfg.code}_test.pdf", ctx.w / "review" / "build_report_test.tsv", config=conf)
         return
     body = Path(cfg.output) / f"{cfg.code}_body.pdf"

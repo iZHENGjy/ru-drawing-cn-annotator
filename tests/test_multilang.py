@@ -200,6 +200,7 @@ def test_notes_reuse_keeps_title_block_only():
 
 
 # ------------------------------------------------------------------ end to end (fake LLM, no OCR): zh -> en text layer
+@pytest.mark.e2e
 def test_zh_en_text_route_end_to_end(tmp_path):
     job = tmp_path / "zh_job"
     job.mkdir()

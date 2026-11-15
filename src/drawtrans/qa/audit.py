@@ -22,6 +22,7 @@ import json
 import logging
 from pathlib import Path
 
+from drawtrans import pagesel
 from drawtrans.languages import re_src as re  # source-language patterns (unchanged for ru)
 
 logging.getLogger("pypdf").setLevel(logging.ERROR)
@@ -253,9 +254,7 @@ def main():
     n = pymupdf.open(cfg.pdf).page_count
     pages = list(range(1, n + 1))
     if a.pages:
-        pages = []
-        for part in a.pages.split(","):
-            x, _, y = part.partition("-"); pages += list(range(int(x), int(y or x) + 1))
+        pages = pagesel.expand(a.pages)
     if not a.pages:
         (ctx.w / "packets" / "_autoskip.log").write_text("", encoding="utf-8")
     total, per = 0, []

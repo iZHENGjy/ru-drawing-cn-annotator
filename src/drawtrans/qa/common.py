@@ -39,13 +39,8 @@ def page_offset(out_doc, src_doc) -> int:
 
 
 def parse_pages(spec: str | None, n: int):
-    if not spec:
-        return list(range(1, n + 1))
-    out = []
-    for part in spec.split(","):
-        a, _, b = part.partition("-")
-        out += list(range(int(a), int(b or a) + 1))
-    return [p for p in out if 1 <= p <= n]
+    from drawtrans import pagesel
+    return pagesel.select(spec, n)
 
 
 # ---------------------------------------------------------------- masks

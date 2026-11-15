@@ -59,6 +59,8 @@ def load(path: str | Path | None = None) -> Config:
         _resolve(c, c.root)
         return c
     d = tomllib.loads(path.read_text(encoding="utf-8"))
+    from drawtrans.config import schema
+    schema.validate(d, path, warn=lambda m: None)
     i18n.from_config(d)
     root = path.parent
     p = d.get("project", {})

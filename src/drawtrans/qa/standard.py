@@ -38,7 +38,8 @@ def _starts_lower(t: str) -> bool:
 
 def check(items: list[dict]) -> dict:
     """-> {"violations": [...], "advisory": [...], "counts": {rule: n}, "ok": bool}"""
-    viol, adv = [], []
+    viol: list[dict] = []
+    adv: list[dict] = []
 
     def hit(rule, it, why):
         (viol if (it.get("std") or 1) >= 2 else adv).append({"rule": rule, "pg": it.get("pg"), "text": (it.get("text") or "")[:60],
@@ -67,7 +68,7 @@ def check(items: list[dict]) -> dict:
                 hit("split_paragraph", b, f"continues «{a['ru'][-30:]}»")
         rows = sorted((it for it in its if it.get("kind") == "row"), key=lambda r: r.get("y") or 0)
         numbered = [bool(re.match(r"^\d{1,3}\.\s", r.get("text") or "")) for r in rows]
-        if sum(numbered) >= 2:
+        if sum(1 for n in numbered if n) >= 2:
             for r, n in list(zip(rows, numbered))[1:]:             # the first row is the header
                 if not n:
                     hit("row_number", r, "table row without its row number")

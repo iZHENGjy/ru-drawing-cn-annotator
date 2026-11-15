@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pymupdf  # noqa: E402
 
+from drawtrans import pagesel
 from drawtrans.config import scanroute as C  # noqa: E402
 
 
@@ -34,9 +35,7 @@ def main():
         skip = (toc[1][2] - 1) if len(toc) > 1 and toc[0][1].startswith("目录") else 0
     want = None
     if a.pages:
-        want = set()
-        for part in a.pages.split(","):
-            x, _, y = part.partition("-"); want |= set(range(int(x), int(y or x) + 1))
+        want = set(pagesel.expand(a.pages))
     out_dir = ctx.w / "visual" / f"r{a.round}"; out_dir.mkdir(parents=True, exist_ok=True)
     tiles = {}
     for i in range(skip, d.page_count):

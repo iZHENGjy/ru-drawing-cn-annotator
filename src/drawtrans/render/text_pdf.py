@@ -23,6 +23,7 @@ from pathlib import Path
 
 import pymupdf
 
+from drawtrans import pagesel
 from drawtrans.config.textroute import DEFAULT_TB_ANCHORS
 from drawtrans.languages import re_src as re  # source-language patterns (unchanged for ru)
 from drawtrans.layout import extend, place
@@ -48,13 +49,7 @@ STD_RE = re.compile(r"(?:ГОСТ|СП|СНиП|ТУ|GOST|SP|SNiP|TU)\s*Р?\s*(\
 
 # ---------------------------------------------------------------- helpers
 def parse_pages(s, n):
-    out = []
-    for part in s.split(","):
-        if "-" in part:
-            a, b = part.split("-"); out += list(range(int(a), int(b) + 1))
-        else:
-            out.append(int(part))
-    return [p for p in out if 1 <= p <= n]
+    return [p for p in pagesel.expand(s) if 1 <= p <= n]
 
 
 def strip_ends(run_words):

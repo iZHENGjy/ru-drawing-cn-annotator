@@ -153,6 +153,7 @@ def test_regress_judge_rules():
     assert j("leaders", 199, 197, tol=5) == "equal"
 
 
+@pytest.mark.e2e
 def test_regress_compare_and_cli(tmp_path):
     base = dict(pages=3, zh_chars=1000, leaders=5, unplaced=0, audit_remaining=0, font_min=4.5, text_sha256="a")
     same = dict(base)
@@ -176,6 +177,7 @@ def test_regress_compare_and_cli(tmp_path):
     assert bad.returncode == 1 and "REGRESSION" in bad.stdout
 
 
+@pytest.mark.e2e
 def test_metrics_cli(synth, tmp_path):
     (src, out), _ = synth
     js = tmp_path / "m.json"

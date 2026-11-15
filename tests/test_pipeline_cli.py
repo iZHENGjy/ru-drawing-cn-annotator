@@ -281,6 +281,7 @@ def test_config_defaults_and_tm_cfg(tmp_path):
     assert tm["project"].endswith("project.json") and any(g.endswith("gost_general.json") for g in tm["glossaries"])
 
 
+@pytest.mark.e2e
 def test_shim_dry_run_both_routes(tmp_path):
     for name, pdf in (("t", DEMO_PDF),):
         folder = tmp_path / name

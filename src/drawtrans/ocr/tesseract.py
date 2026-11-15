@@ -14,17 +14,12 @@ from pathlib import Path
 
 import pymupdf  # noqa: E402
 
+from drawtrans import pagesel
 from drawtrans.config import scanroute as C  # noqa: E402
 
 
 def pages_arg(s, n):
-    if not s:
-        return list(range(1, n + 1))
-    out = []
-    for part in s.split(","):
-        a, _, b = part.partition("-")
-        out += list(range(int(a), int(b or a) + 1))
-    return [p for p in out if 1 <= p <= n]
+    return pagesel.select(s, n)
 
 
 def main():

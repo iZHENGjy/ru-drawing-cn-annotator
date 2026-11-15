@@ -10,14 +10,13 @@ import sys
 import tempfile
 from pathlib import Path
 
+from drawtrans import languages as i18n
+
 REQUIRED_MODULES = [("pymupdf", "pymupdf"), ("PIL", "pillow"), ("numpy", "numpy"), ("pypdf", "pypdf"),
                     ("reportlab", "reportlab"), ("jieba", "jieba"), ("ezdxf", "ezdxf"), ("pdfplumber", "pdfplumber")]
 OPTIONAL_MODULES = [("rapidocr", "rapidocr (second OCR detector, recommended for scans)"),
                     ("onnxruntime", "onnxruntime (needed by rapidocr)"), ("anthropic", "anthropic (only for backend = anthropic)")]
-FONTS = ["C:/Windows/Fonts/Deng.ttf", "C:/Windows/Fonts/simhei.ttf", "C:/Windows/Fonts/msyh.ttc",
-         "/System/Library/Fonts/PingFang.ttc", "/System/Library/Fonts/STHeiti Light.ttc",
-         "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc", "/usr/share/fonts/wqy-microhei/wqy-microhei.ttc",
-         "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc", "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc"]
+FONTS = i18n.CJK_FONTS                 # the same list the engines use (drawtrans.languages)
 BEST_MIN_BYTES = 10 * 1024 * 1024    # tessdata_best rus/eng are ~15 MB, tessdata_fast ~3-4 MB
 
 
@@ -84,10 +83,11 @@ def run_checks(cfg=None) -> list[tuple[str, str, str]]:
     else:
         _row(rows, "tesseract", soft, "not found: install it (UB Mannheim build on Windows) or set $TESSERACT / [scan] tesseract")
     dirs = _tessdata_dirs(cfg, tess)
-    for lang in ("rus", "eng"):
+    main = i18n.pair().tess_lang.split("+")[0]            # the source language's model (rus, eng, kaz, chi_sim ...)
+    for lang in dict.fromkeys(i18n.pair().tess_lang.split("+")):
         f = next((d / f"{lang}.traineddata" for d in dirs if (d / f"{lang}.traineddata").is_file()), None)
         if f is None:
-            _row(rows, f"tessdata {lang}", soft if lang == "rus" else "WARN",
+            _row(rows, f"tessdata {lang}", soft if lang == main else "WARN",
                  f"{lang}.traineddata not found in {[str(d) for d in dirs] or 'any known folder'}")
         else:
             size = f.stat().st_size
@@ -97,7 +97,7 @@ def run_checks(cfg=None) -> list[tuple[str, str, str]]:
             _row(rows, f"tessdata {lang}", st, f"{var}, {size // 1024} KB, {f}{note}")
 
     font = next((c for c in ((cfg.scan.font if route == "scan" else (cfg.raw.get("project", {}).get("font") if cfg else None)),
-                             os.environ.get("RUDRAW_FONT"), *FONTS) if c and Path(c).is_file()), None)
+                             os.environ.get("RUDRAW_FONT"), *i18n.pair().fonts) if c and Path(c).is_file()), None)
     if font:
         _row(rows, "chinese font", "OK", font)
     else:

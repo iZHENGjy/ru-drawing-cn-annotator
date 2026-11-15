@@ -73,6 +73,8 @@ def _p(root: Path, v):
 def load(path: str | Path | None = None) -> ScanConfig:
     path = Path(path or "project.toml").resolve()
     d = tomllib.loads(path.read_text(encoding="utf-8"))
+    from drawtrans.config import schema
+    schema.validate(d, path, warn=lambda m: None)      # errors only; warnings are shown once by the pipeline
     i18n.from_config(d)
     s = d.get("scan", {})
     c = ScanConfig(root=path.parent)

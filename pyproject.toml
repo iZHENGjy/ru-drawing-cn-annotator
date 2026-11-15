@@ -31,6 +31,10 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 filterwarnings = ["ignore::DeprecationWarning"]
+markers = [
+    "e2e: end-to-end runs of the pipeline on synthetic data (subprocesses, a few seconds)",
+    "regression: layout regression against stored layout_sha256 baselines",
+]
 
 [tool.ruff]
 line-length = 120
@@ -57,6 +61,6 @@ python_version = "3.11"
 ignore_missing_imports = true
 follow_imports = "silent"
 # typed core: languages, paths, config schema, shared types, placement record, output-standard gate
-files = ["src/drawtrans/paths.py", "src/drawtrans/types.py", "src/drawtrans/config/schema.py",
+files = ["src/drawtrans/paths.py", "src/drawtrans/records.py", "src/drawtrans/config/schema.py",
          "src/drawtrans/render/placelog.py", "src/drawtrans/qa/standard.py", "src/drawtrans/pipeline/samples.py",
          "src/drawtrans/languages/__init__.py"]

@@ -71,7 +71,10 @@ class JobConfig:
         p = Path(path or "project.toml").resolve()
         if not p.exists():
             raise FileNotFoundError(f"config not found: {p} (create one with: rudraw init <folder> --pdf file.pdf)")
-        return cls(p, tomllib.loads(p.read_text(encoding="utf-8")))
+        raw = tomllib.loads(p.read_text(encoding="utf-8"))
+        from drawtrans.config import schema
+        schema.validate(raw, p)                       # every error at once, naming the key and the fix
+        return cls(p, raw)
 
     # ---- scan route (ScanConfig untouched)
     @property
