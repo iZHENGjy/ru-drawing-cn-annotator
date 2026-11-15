@@ -59,7 +59,7 @@ def schema() -> dict[str, dict[str, Key]]:
         "job": {"route": Key(STR, "", ("auto", "scan", "text")), "max_audit_loops": Key(INT), "visual": Key(BOOL),
                 "visual_max_tiles": Key(INT), "qa": Key(BOOL), "batch_size": Key(INT),
                 "english": Key(STR, "", ("keep", "replace")), "batch": Key(STR), "optimize": Key(BOOL),
-                "cheap_model": Key(STR)},
+                "cheap_model": Key(STR), "cheap_short_phrases": Key(BOOL)},
         "output": {"appendix": Key(BOOL), "compact": Key(BOOL)},
         "guard": {"mark_regex": Key(STR, "regex with two groups: letters, number"), "std_regex": Key(STR)},
     }

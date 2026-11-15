@@ -215,6 +215,10 @@ replaying unchanged):
 - fixed texts already in the TM (title-block fields, table headers) are listed as known in the packet;
 - a label that breaks a code rule is dropped instead of re-asking the whole sheet (the audit re-checks it).
 
+Opt-in `[job] cheap_short_phrases = true`: phrases of up to three words go to the cheap model in batches of
+150 (measured on a 43-sheet set: 330 phrases for $0.034 instead of about $0.27, but about a fifth of the
+wordings differ from the reviewed TM and some keep/skip decisions change, so it is off by default).
+
 Always on: mechanical fixes of an answer (a format written «А3х3», decimal commas) before validation
 instead of a paid retry, and a prompt-cache warm-up (the first call of a stage runs alone, the parallel
 calls after it read the cached system prompt).

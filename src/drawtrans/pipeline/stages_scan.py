@@ -117,7 +117,7 @@ def run_translate(sc: StageCtx):
     if not still:
         return {"misses": len(misses), "calls": 0, "already_in_tm": len(misses)}
     bs = int(sc.cfg.job["batch_size"])
-    if sc.cfg.job.get("optimize"):          # short labels go together to the cheap model
+    if sc.cfg.job.get("cheap_short_phrases"):   # opt-in: short labels together on the cheap model (wording drifts)
         short = [it for it in still if len(it["key"].split()) <= 3 and len(it["key"]) <= 32]
         long_ = [it for it in still if not (len(it["key"].split()) <= 3 and len(it["key"]) <= 32)]
         payloads, ids = store.batches(long_, bs, "")

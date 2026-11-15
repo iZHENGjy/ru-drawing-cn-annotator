@@ -41,6 +41,7 @@ JOB_DEFAULTS = {
     "batch": "review/batch.tsv",   # text route: translated batch for 40_merge_tm.py
     "optimize": False,        # cost options (docs/pipeline.md "Cost"): new projects get true from rudraw init
     "cheap_model": "haiku",   # model for the simple calls when optimize is on
+    "cheap_short_phrases": False,   # opt-in: short phrases on the cheap model (-7 % cost, some wording drift)
 }
 
 
