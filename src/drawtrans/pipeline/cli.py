@@ -79,7 +79,7 @@ pdf = "{pdf_ref}"
 code = "{code}"                  # short tag for output names
 work = "work"                    # png/ ocr/ lines/ rapid/ notes/ map/ ... and job/ (state, logs, ledger)
 output = "output"
-output_standard = 2              # docs/output_standard.md: labels below, extension column, one title-block legend line
+output_standard = 3              # docs/output_standard.md §8 (v2): printed sizes, no rule/ink, leaders limited
 quality_rules = true             # labels over 2-3 lines as one phrase; «Лист» in headers = 页, not 钢板
 # tessdata = "tessdata"          # folder with rus.traineddata (tessdata_best) + configs/
 # count_word = "根"               # 件 for embedded items / parts volumes

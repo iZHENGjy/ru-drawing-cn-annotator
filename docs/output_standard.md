@@ -94,8 +94,9 @@ and the legend words (`图签译文：` / `Title block:` …) follow the target 
 
 ## 8. Standard v2 (`[scan] output_standard = 3`) — numbers
 
-Not the default yet (it needs the user's approval of the sample pages). Earlier deliveries keep their
-standard and rebuild byte for byte. Every number below is `drawtrans.layout.policy.V2`; the engine
+The default for new projects since the user approved the sample pages (2026-11-15): `drawtrans init` writes
+`output_standard = 3`. Earlier deliveries keep their standard and rebuild byte for byte; baselines of v2
+volumes store one layout hash per page (`layout_pages`), so a change is located to its page. Every number below is `drawtrans.layout.policy.V2`; the engine
 (`layout/core.py`) and the gate (`qa/standard.py`, `qa/occlusion.py`) read the same object
 (`tests/test_layout_core.py::test_policy_matches_qa`).
 

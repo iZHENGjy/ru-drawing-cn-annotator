@@ -377,6 +377,7 @@ def annotate(doc, pg, mapping, trans, report, _v2_col=False):
 
     std2 = int(getattr(CTX.cfg, "output_standard", 1) or 1) >= 2
     std3 = int(getattr(CTX.cfg, "output_standard", 1) or 1) >= 3     # output standard v2 engine (layout.core)
+    col_rows: list = []                  # v2: table rows that continue into the column [(band, text)]
     scale3, eng3 = 1.0, None
     prose_col, para_legend = [], []
     for q in (mapping.get("paras") or []) if std2 else []:
@@ -808,7 +809,8 @@ def annotate(doc, pg, mapping, trans, report, _v2_col=False):
         COVER[(doc, pg)] = cov
         draws += _draws
         legend += stamp_legend
-        prose_col += col_entries
+        prose_col += [(t, z) for t, z, b in col_entries if b is None]
+        col_rows = [(b, z) for t, z, b in col_entries if b is not None]
         if n_fb:
             report.append((doc, pg, "编号入栏", str(n_fb)))
     else:
@@ -854,7 +856,7 @@ def annotate(doc, pg, mapping, trans, report, _v2_col=False):
         best = None
         if std3:
             if not scan_v2.place_legend(txt, eng3, tbbox, pl.frame, PW, PH, pg, draws):
-                legend_side = txt
+                prose_col.append(((tbbox[1] if tbbox else PH * 0.75), txt))     # flows in the column, no overlap
                 report.append((doc, pg, "对照表入加宽栏", txt[:40]))
             txt = None
         tbw = (tbbox[2] - tbbox[0] - 60) if tbbox else PW * 0.38
@@ -918,7 +920,7 @@ def annotate(doc, pg, mapping, trans, report, _v2_col=False):
                     paras.append(("P", (f"{no} " if no and not z.startswith(no) else "") + z, no, itn.get("ru") or ""))
             regw = max(rx1 - hd["x0"], 180 if big else 120)
             found = None
-            for wfac in (1.0, 1.35, 0.8, 1.7):
+            for wfac in ((1.0, 1.35, 0.8, 1.7) if not std3 else ()):     # v2: notes always go to the column
                 for fsc in (fs, fs * 0.88):
                     bw = regw * wfac
                     ls = []
@@ -996,10 +998,13 @@ def annotate(doc, pg, mapping, trans, report, _v2_col=False):
                 state[key] = best[1]
                 return best[1]
             return None
-        for scale in (1.0, 0.9, 0.8, 0.7, 0.6, 0.5):
+        for scale in ((1.0, 0.9, 0.8, 0.7, 0.6, 0.5) if not std3 else
+                      (1.0, 0.89, 0.8, scan_v2.V2.column_floor * scan_v2.V2.print_margin / scan_v2.V2.column_pref)):
             out = []; ycur = 20; state.clear()
             for hd, paras, fs in widen_items:
                 fs = max(fs, 7.5 if not big else 9) * scale
+                if std3:                               # v2: the column's printed size, clause by clause
+                    fs = scan_v2.V2.pt(scan_v2.V2.column_pref, scale3) * scale
                 ycur = max(ycur, hd["y0"])
                 for p in paras:
                     tgt = hd["y0"] if p[0] == "H" else (ruy(p[3], hd) or numy(p[2], hd))
@@ -1014,7 +1019,7 @@ def annotate(doc, pg, mapping, trans, report, _v2_col=False):
         draws += out
 
     # 成段文字(output_standard 2):右侧拓展栏,逐段与俄文段落顶部对齐,整句
-    if prose_col:
+    if prose_col or col_rows:
         colw = (PW * 0.62) if not big else min(PW * 0.3, 900)
         if std3:
             colw = scan_v2.column_width(PW, big)
@@ -1024,7 +1029,12 @@ def annotate(doc, pg, mapping, trans, report, _v2_col=False):
         fsP = 12.0 if big else 9.0
         if std3:
             fsP = scan_v2.V2.pt(scan_v2.V2.column_pref, scale3)
-        for scale in ((1.0, 0.94, 0.89) if not std3 else (1.0, 0.89, 0.8, scan_v2.V2.column_floor / scan_v2.V2.column_pref)):
+            if col_rows:                       # table rows first: fixed at their rows, between continued rules
+                rt, rleft = scan_v2.layout_rows(col_rows, X, colw, fsP, scan_v2.V2.column_floor * scan_v2.V2.print_margin / scan_v2.V2.column_pref,
+                                                wrap, draws, busy=taken)
+                taken += rt
+                prose_col += rleft
+        for scale in ((1.0, 0.94, 0.89) if not std3 else (1.0, 0.89, 0.8, scan_v2.V2.column_floor * scan_v2.V2.print_margin / scan_v2.V2.column_pref)):
             f = fsP * scale; out = []; ycur = 18.0
             for top, zh in sorted(prose_col):
                 ls = wrap(zh, f, colw - 10); hh = len(ls) * f * 1.3
@@ -1043,7 +1053,7 @@ def annotate(doc, pg, mapping, trans, report, _v2_col=False):
     if legend_side:
         fsL = 9 if big else 6.5
         if std3:
-            fsL = scan_v2.V2.pt(scan_v2.V2.legend_floor, scale3)
+            fsL = scan_v2.V2.pt(scan_v2.V2.legend_floor, scale3) * scan_v2.V2.print_margin
         colw2 = (PW * 0.62) if not big else min(PW * 0.3, 900)
         if std3:
             colw2 = scan_v2.column_width(PW, big)
@@ -1135,15 +1145,22 @@ def annotate(doc, pg, mapping, trans, report, _v2_col=False):
         elif d[0] == "txt":
             _, X, yy, t, f = d
             c.setFont(FONT, f); c.drawString(X, Y(yy + f * 0.95), t)
+        elif d[0] == "hl":                             # v2: a table rule continued into the column
+            _, hx0, hx1, hy = d
+            c.saveState(); c.setStrokeColorRGB(0.55, 0.65, 0.85); c.setLineWidth(0.35)
+            c.line(hx0, Y(hy), hx1, Y(hy)); c.restoreState()
         elif d[0] == "seg":                            # v2 leader: end points on the two boxes' edges
             (sx, sy), (tx, ty) = d[1], d[2]
             c.setLineWidth(0.3); c.line(sx, Y(sy), tx, Y(ty))
     if extra_w:
         c.setLineWidth(0.6)
         c.line(PW + 4, 10, PW + 4, PH - 10)
-        c.setFont(FONT, (9 if big else 6.5) if not std3 else scan_v2.V2.pt(scan_v2.V2.column_floor, scale3))
-        c.drawString(PW + 14, 8, "← 左侧俄文段落的中文对照(逐段对齐)" if prose_col else
-                     "← 左侧俄文说明条文的中文对照(逐条对齐)" if widen_items else "← 左侧图签栏目的中文对照")
+        fsF = (9 if big else 6.5) if not std3 else scan_v2.V2.pt(scan_v2.V2.column_floor, scale3) * scan_v2.V2.print_margin
+        low = max([d[2] + d[4] * 1.3 for d in draws if d[0] == "txt"] + [0])
+        if not std3 or low < PH - 8 - fsF * 1.2:      # v2: the footnote only where the column leaves room
+            c.setFont(FONT, fsF)
+            c.drawString(PW + 14, 8, "← 左侧俄文段落的中文对照(逐段对齐)" if prose_col else
+                         "← 左侧俄文说明条文的中文对照(逐条对齐)" if widen_items else "← 左侧图签栏目的中文对照")
     c.save(); buf.seek(0)
     ov = PdfReader(buf).pages[0]
     if extra_w:

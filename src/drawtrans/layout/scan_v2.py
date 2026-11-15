@@ -79,23 +79,54 @@ def place_items(items, eng: core.Engine, pl, pg, hmed, big, cov, draws, low_key=
             placelog.add(route="scan", pg=pg, kind="label", role="tiny", text=it["zh"], std=3, status="legend_only",
                          src=list(it["box"]), ps=eng.s)            # the legend line explains шт./pcs.
         else:
-            fallback.append((it, p.reason))
+            fallback.append((it, p.reason, src.cell))
     # numbered fallback: marker next to the source, the translation in the column at the source's height
     entries = []
-    for n, (it, why) in enumerate(sorted(fallback, key=lambda t: (t[0]["box"][1], t[0]["box"][0])), 1):
+    for n, (it, why, cell) in enumerate(sorted(fallback, key=lambda t: (t[0]["box"][1], t[0]["box"][0])), 1):
+        band = (round(cell[1], 1), round(cell[3], 1)) if cell else None      # table row: rule above / below
         mk = core.marker(n)
         msrc = core.Source(f"m{n}", mk, tuple(it["box"]), 0.0, "tiny", own=(tuple(it["box"]),))
         mp = eng.place_one(msrc)
         ru = re.sub(r"\s+", " ", (it.get("ru") or "")).strip()
         if mp.status == "placed":
             _commit(mp, {"box": it["box"], "zh": mk}, pg, eng, cov, draws, role="marker")
-            entries.append((it["box"][1], f"{mk} {it['zh']}"))
+            entries.append((it["box"][1], f"{mk} {it['zh']}", band))
         else:                                                       # no room even for the marker
-            entries.append((it["box"][1], f"{mk} {ru[:24]}{'…' if len(ru) > 24 else ''}: {it['zh']}"))
+            entries.append((it["box"][1], f"{mk} {ru[:24]}{'…' if len(ru) > 24 else ''}: {it['zh']}", band))
         placelog.add(route="scan", pg=pg, kind="label", role="fallback", text=it["zh"], std=3, status="column",
                      src=list(it["box"]), ps=eng.s, why=why)
         cov["placed"].append((it["box"], it["zh"]))
     return entries, legend_extra, len(fallback)
+
+
+def layout_rows(rows, X, colw, fsP, floor_ratio, wrap, draws, busy=()):
+    """Table rows continued into the column: the entries of one row band sit between that row's two rules,
+    drawn as light lines across the column.  Returns (taken bands, entries that did not fit -> flowing text)."""
+    by: dict = {}
+    for band, text in rows:
+        by.setdefault(band, []).append(text)
+    taken, left = [], []
+    for (y0, y1), texts in sorted(by.items(), key=lambda kv: (kv[0][1] - kv[0][0], kv[0][0])):   # narrow rows first
+        text = "  ".join(texts)
+        placed = False
+        if any(y0 < b1 - 0.5 and b0 < y1 - 0.5 for b0, b1 in list(taken) + list(busy)):   # row used / column text there
+            left.append((y0, text))
+            continue
+        for k in (1.0, 0.89, 0.8, floor_ratio):
+            f = fsP * k
+            ls = wrap(text, f, colw - 10)
+            if len(ls) * f * 1.18 <= (y1 - y0) - 2:
+                yy = y0 + 1.0
+                for t in ls:
+                    draws.append(("txt", X, yy, t, f)); yy += f * 1.18
+                placed = True
+                break
+        if placed:
+            taken.append((y0, y1))
+            draws.append(("hl", X - 4, X + colw - 6, y0)); draws.append(("hl", X - 4, X + colw - 6, y1))
+        else:
+            left.append((y0, text))
+    return taken, left
 
 
 def _commit(p: core.Placement, it, pg, eng: core.Engine, cov, draws, role):
@@ -119,7 +150,7 @@ def place_legend(txt, eng: core.Engine, tbbox, frame, PW, PH, pg, draws):
     its lower edge; printed >= legend floor.  Returns True when placed (else the caller puts it in the column)."""
     P, b, m = V2, eng.b, eng.m
     width0 = (tbbox[2] - tbbox[0]) if tbbox else PW * 0.38
-    for f in (P.pt(P.legend_pref, eng.s), P.pt(P.legend_floor, eng.s)):
+    for f in (P.pt(P.legend_pref, eng.s) * P.print_margin, P.pt(P.legend_floor, eng.s) * P.print_margin):
         for wf in (1.0, 1.3):
             ls = m.wrap(txt, width0 * wf, f, 6)
             if not ls:

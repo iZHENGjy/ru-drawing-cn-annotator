@@ -260,14 +260,17 @@ class Engine:
         self.lmax = policy.leader_max(board.W, board.H)
         self.small_budget = 10 ** 9           # labels allowed below the preferred minimum (set_budget)
         self.small_used = 0
+        self.lead_sum = 0.0
 
     def set_budget(self, n_labels: int):
-        """at most policy.small_share_max of the page's labels may print below label_pref_min (7 pt)."""
+        """per page: at most small_share_max of the labels below label_pref_min (7 pt) and at most
+        leader_share_max of them with a leader (never more than leaders_per_page)."""
         self.small_budget = int(self.P.small_share_max * n_labels)
+        self.leader_budget = min(self.P.leaders_per_page, int(self.P.leader_share_max * n_labels))
 
     def sizes(self, src: Source) -> list[float]:
         P = self.P
-        floor = P.pt(P.stamp_floor if src.kind == "stamp" else P.label_floor, self.s)
+        floor = P.pt(P.stamp_floor if src.kind == "stamp" else P.label_floor, self.s) * P.print_margin
         pref = max(P.label_ratio * src.size,
                    P.pt(P.stamp_floor if src.kind == "stamp" else P.label_pref_min, self.s) * P.print_margin)
         out: list[float] = []
@@ -364,12 +367,13 @@ class Engine:
         if lc is not None:
             self.b.commit(lc.rect)
             self.leaders += 1
+            self.lead_sum += lc.why.get("leader", 0.0)
             return Placement(src, "placed", lc)
         return Placement(src, "column", None, ",".join(f"{k}:{v}" for k, v in sorted(reasons.items())))
 
     def _leader(self, src: Source, sizes, extra_obstacles) -> Cand | None:
         P = self.P
-        if src.kind in ("stamp", "tiny") or self.leaders >= P.leaders_per_page:
+        if src.kind in ("stamp", "tiny") or self.leaders >= min(P.leaders_per_page, getattr(self, "leader_budget", P.leaders_per_page)):
             return None
         r = src.rect
         best = None
@@ -390,7 +394,7 @@ class Engine:
                             continue                        # never above the source
                         pa, pb = _nearest(r, rect)
                         L = math.dist(pa, pb)
-                        if L > self.lmax or L < 0.5 or (best and L >= best[0]):
+                        if L > self.lmax or L < 0.5 or (best and L >= best[0])                                 or (self.lead_sum + L) / (self.leaders + 1) > P.leader_mean_max:   # keep the mean <= 15 pt
                             continue
                         if not self.b.free(rect, fs, src.own, extra_obstacles)[0]:
                             continue
