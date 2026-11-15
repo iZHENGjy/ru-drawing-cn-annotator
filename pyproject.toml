@@ -63,4 +63,4 @@ follow_imports = "silent"
 # typed core: languages, paths, config schema, shared types, placement record, output-standard gate
 files = ["src/drawtrans/paths.py", "src/drawtrans/records.py", "src/drawtrans/config/schema.py",
          "src/drawtrans/render/placelog.py", "src/drawtrans/qa/standard.py", "src/drawtrans/pipeline/samples.py",
-         "src/drawtrans/languages/__init__.py"]
+         "src/drawtrans/languages/__init__.py", "src/drawtrans/layout/policy.py", "src/drawtrans/layout/core.py"]

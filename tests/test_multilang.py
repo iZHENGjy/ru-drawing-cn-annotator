@@ -116,7 +116,8 @@ def test_standard_gate_rules():
            dict(kind="column", pg=3, text="小字", fs=5.0, std=2)]
     r = QS.check(bad)
     assert not r["ok"]
-    assert r["counts"] == {"above": 1, "split_paragraph": 1, "title_block_cell": 1, "row_number": 1, "font_floor": 1}
+    assert {k: v for k, v in r["counts"].items() if v} == {"above": 1, "split_paragraph": 1, "title_block_cell": 1,
+                                                          "row_number": 1, "font_floor": 1}
     legacy = [dict(bad[0], std=1)]
     assert QS.check(legacy)["ok"] and QS.check(legacy)["advisory_n"] == 1
 

@@ -28,10 +28,12 @@ from pathlib import Path
 import numpy as np
 import pymupdf
 
+# calibrated on reviewer findings (round 2) of two real sets, see docs / QA.md
+from drawtrans.layout.policy import V2 as _V2  # noqa: E402  the engine's numbers (output standard §8)
 from drawtrans.qa import common as K  # noqa: E402
 
-# calibrated on reviewer findings (round 2) of two real sets, see docs / QA.md
-DEFAULTS = dict(floor=6.0, ink_box=0.03, ink_glyph=0.15, rule_frac=0.5, dpi=150)
+DEFAULTS = dict(floor=_V2.label_floor, ink_box=_V2.ink_box, ink_glyph=_V2.ink_glyph, rule_frac=0.5, dpi=_V2.raster_dpi)
+V2_THRESHOLDS = DEFAULTS
 
 
 def _arr(pix, ch):

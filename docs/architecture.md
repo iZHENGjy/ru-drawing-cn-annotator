@@ -84,14 +84,18 @@ run that breaks it "not deliverable".
 | **BabelDOC / PDFMathTranslate** | An intermediate representation between "read the PDF" and "write the PDF" (here: OCR lines, segments, page maps, placement records as typed records in `records.py`); translation behind a service interface with a cache (`llm/session.py`, `llm/backends.py`); configuration in one checked model. | Re-typesetting the page: they rebuild the document in the target language, we must leave the original untouched and add a layer (an engineering deliverable is checked against the original). Their general-purpose layout model does not know title blocks, member marks or extension columns. |
 | **Argos Translate** | Language pairs as first-class objects (`languages.Pair` with source/target profiles), pair-specific data in its own place (`glossary/<src>-<tgt>/`), pivoting avoided by explicit pairs. | Downloadable model packages: the translation model here is an LLM with constrained tasks; what varies per pair is small (OCR model, alphabet, glossary, prompt wording) and ships with the code. |
 
-## Two placers, one layout package
+## One placement engine (output standard 3)
 
-The text-layer route (`layout/analyse.py` + `place.py` + `extend.py`, drawn with PyMuPDF) and the scan route
-(`layout/scan_place.py`, drawn with reportlab and merged with pypdf) both live in `layout/` and share the
-language layer (fonts, line breaking), the output standard, the placement record and its gate. They are not
-merged into one placer yet: each one reproduces an approved delivery byte for byte (`layout_sha256`), and a
-merge would move translated spans on those deliveries. The merge is the next structural step; it needs a new
-output-standard version, a visual check of the approved samples and new baselines.
+`layout/core.py` decides where every translation goes, for both routes: `Source` (what to place) →
+candidates by tier → hard filter on a `RasterBoard` (rules and ink from a 150 dpi render, word boxes, placed
+boxes, the frame) → score → lowest tier, best score → `Placement`; no candidate left → numbered marker and
+the extension column. Every number is `layout/policy.py` (the QA gate reads the same object). The routes only
+collect their items and draw: `layout/scan_v2.py` (scan route, reportlab overlay) and `layout/text_v2.py`
+(text-layer route, PyMuPDF). Text metrics and line breaking are shared (`core.Metrics`, jieba words with the
+drawing font).
+
+The legacy placers (`layout/scan_place.py` with `output_standard` 1/2, `render/text_pdf.py` slots/inserts)
+stay frozen so that approved deliveries rebuild byte for byte; new projects get standard 3 from `drawtrans init`.
 
 ## Regression
 

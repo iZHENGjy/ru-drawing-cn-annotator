@@ -50,6 +50,17 @@ def text_fingerprints(doc, pages=None):
     return h1.hexdigest(), h2.hexdigest()
 
 
+def page_fingerprints(pages) -> list[str]:
+    """layout hash of every output page (same span rounding as layout_sha256), 12 hex digits each."""
+    out = []
+    for txt, spans in pages:
+        h = hashlib.sha256()
+        for bb, size, text in spans:
+            h.update((f"{bb[0]:.1f},{bb[1]:.1f},{bb[2]:.1f},{bb[3]:.1f}|{size:.2f}|{text}" + "\n").encode("utf-8"))
+        out.append(h.hexdigest()[:12])
+    return out
+
+
 def read_report(work: Path | None, report_tsv: Path | None = None):
     """-> Counter of the build_report.tsv kinds (3rd column) or None when there is no report."""
     fn = Path(report_tsv) if report_tsv else (Path(work) / "review" / "build_report.tsv" if work else None)
@@ -118,6 +129,7 @@ def compute(out_pdf, work=None, config=None, src=None, floor=FLOOR, count_word=N
     m["audit_remaining"] = audit_remaining(work, audit_log)
     m["mark_gate"] = mark_gate(config) if (run_check and config) else None
     m["text_sha256"], m["layout_sha256"] = text_fingerprints(doc, pt)
+    m["layout_pages"] = page_fingerprints(pt)          # one hash per output page: a change is located to its page
     if src:
         from drawtrans.qa import occlusion as O
         rows, fl = O.run(out_pdf, src, dpi, floor=floor, cache_dir=cache_dir)

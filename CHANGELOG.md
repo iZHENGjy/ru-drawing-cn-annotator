@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.3.0 — layout standard v2
+
+- One placement engine for both routes (`layout/core.py`, `layout/policy.py`): candidates → hard filter →
+  score → tiers → leader → numbered column; `[scan] / [project] output_standard = 3`, default for new projects.
+- Printed sizes (A3 drawings, A4 documents): no label below 6 pt, ≤ 5 % below 7 pt per page; shrinking ≤ 0.8 ×.
+- No translation on a rule or on source ink (150 dpi raster, dashed rules, no inset); same thresholds in QA.
+- Leaders ≤ 5 per page, ≤ 3 % of labels, mean ≤ 15 pt, never across source text; end points on the box edges.
+- Approval stamp: one line outside the stamp ≥ 7 pt; title-block legend above the title block ≥ 6.5 pt.
+- Tables: rows that leave their cells are listed in the column between the row's continued rules.
+- QA: printed-size, occlusion and leader rules in the gate; visual review sampled evenly per page; per-page
+  layout hashes in the metrics; page cache keyed on the engine files.
+- Earlier deliveries (standard 1/2) rebuild byte for byte.
+
 ## 0.2.0 — multilingual, restructured
 
 ### Structure

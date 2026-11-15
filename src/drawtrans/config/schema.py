@@ -34,7 +34,7 @@ def _scan_keys() -> dict[str, Key]:
                                     else FLOAT if name == "float" else STR)
         out[f.name] = Key(ty or STR)
     out["pdf"] = out["work"] = out["output"] = out["font"] = out["tesseract"] = out["tessdata"] = Key(STR)
-    out["output_standard"] = Key(INT, "1 = approved legacy layout, 2 = docs/output_standard.md", (1, 2))
+    out["output_standard"] = Key(INT, "1 = approved legacy layout, 2 = docs/output_standard.md, 3 = v2 (§8, layout.policy)", (1, 2, 3))
     return out
 
 
@@ -45,6 +45,7 @@ def schema() -> dict[str, dict[str, Key]]:
         "project": {"name": Key(STR), "pdf": Key(STR), "dxf": Key(STR), "tm": Key(STR), "glossaries": Key(LIST),
                     "review_dir": Key(STR), "output_dir": Key(STR), "extract_dir": Key(STR), "font": Key(STR),
                     "notes_pages": Key(STR, 'pages of running text, e.g. "5-30,41-60"'),
+                    "output_standard": Key(INT, "text route: 1 legacy placer, 3 = v2 (§8)", (1, 2, 3)),
                     "source_lang": Key(STR, "ISO 639-1 code of the source language", langs),
                     "target_lang": Key(STR, "ISO 639-1 code of the target language", langs)},
         "title_block": {"anchors": Key(LIST), "left_stamp_width": Key(FLOAT)},
