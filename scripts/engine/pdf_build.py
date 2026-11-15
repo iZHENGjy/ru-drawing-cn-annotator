@@ -659,6 +659,9 @@ def build(pdf, pages, out_path, tm: TM, review_dir, notes_mode="inplace", notes_
         Path(out_path).parent.mkdir(parents=True, exist_ok=True)
         doc.subset_fonts()
         doc.save(out_path, garbage=3, deflate=True)
+        import placelog
+        placelog.dump(Path(out_path).with_suffix(".placements.json"), {"route": "text"})
+        placelog.reset()
     log(f"missing TM keys: {len(tm.missing)} -> {out_path}  ({time.time() - t0:.0f}s)")
     return rows
 

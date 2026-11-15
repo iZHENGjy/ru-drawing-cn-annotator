@@ -365,6 +365,7 @@ class Painter:
         self.page = page
         self.writers = {}
         self.drawn = []          # (page rect of the written line, text)
+        self.log = True          # placement record (placelog) for the output-standard gates
 
     def line(self, text: str, slot: pymupdf.Rect, fs: float, o: str):
         if not text:
@@ -375,6 +376,11 @@ class Painter:
         X, Y = slot.x0, base_y
         fr = pymupdf.Rect(X, base_y - asc * fs * 0.85, X + text_len(text, fs), base_y - desc * fs * 0.5)
         self.drawn.append((from_frame_rect(fr, o), text))
+        if self.log:
+            import placelog
+            r_ = from_frame_rect(fr, o)
+            placelog.add(route="text", pg=self.page.number + 1, kind="label", text=text, fs=fs,
+                         bb=[r_.x0, r_.y0, r_.x1, r_.y1], std=1)
         px, py = from_frame_pt(X, Y, o)
         rot = {"h": 0, "up": 90, "down": 270}[o]
         if rot == 0:

@@ -38,6 +38,9 @@ def build(ctx, pages, out_pdf, report_tsv=None, verbose=True):
         stats.append(f"{n}:{cnt}({time.time() - t0:.0f}s)")
     with open(out_pdf, "wb") as fh:
         w.write(fh)
+    import placelog
+    placelog.dump(Path(out_pdf).with_suffix(".placements.json"), {"route": "scan", "pages": list(pages)})
+    placelog.reset()
     cnt = Counter(r[2] for r in report if not str(r[2]).isdigit())
     if verbose:
         print(out_pdf); print("  ", " ".join(stats)); print("  ", dict(cnt))

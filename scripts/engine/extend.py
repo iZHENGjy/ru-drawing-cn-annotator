@@ -229,7 +229,7 @@ def collect(page, tm, tb):
         if key is None:
             if zh is None:
                 continue
-            plain.append(dict(y=p["rect"].y0, zh=zh, x0=p["rect"].x0, x1=p["rect"].x1, size=p["size"]))
+            plain.append(dict(y=p["rect"].y0, zh=zh, x0=p["rect"].x0, x1=p["rect"].x1, size=p["size"], ru=p.get("text", "")))
         else:
             rows.setdefault(key, []).append((p, zh))
     # a merged cell spanning several rows joins the first row it spans
@@ -271,7 +271,7 @@ def collect(page, tm, tb):
         if last is not None and abs(e["y"] - last["y"]) < 0.6 * e["size"] and e["x0"] > last["x1"]:
             last["zh"] += " | " + e["zh"]; last["x1"] = e["x1"]
         else:
-            last = dict(y=e["y"], zh=e["zh"], bot=None, x1=e["x1"])
+            last = dict(y=e["y"], zh=e["zh"], bot=None, x1=e["x1"], ru=e.get("ru", ""))
             entries.append(last)
     entries.sort(key=lambda e: e["y"])
     return entries, legend, dict(paras=len(body) + len(legend), missing=missing, rules=sorted(rules))
@@ -345,7 +345,14 @@ def render(page, tm, tb, dry=False):
     X = PW + 16
     for y in rules:                                        # the table continues into the column (light rules)
         page.draw_line((X - 4, y), (X + colw + 4, y), color=RULE_COLOR, width=0.35)
+    import placelog
+    for e in entries:
+        placelog.add(route="text", pg=page.number + 1, kind="row" if e.get("bot") is not None else "para",
+                     text=e["zh"], ru=e.get("ru", ""), y=e["y"], std=2)
+    for y, t, f in lines:
+        placelog.add(route="text", pg=page.number + 1, kind="column", text=t, fs=f, y=y, std=2)
     painter = Painter(page)
+    painter.log = False                                    # recorded above as column lines
     for y, t, f in lines:
         painter.line(t, pymupdf.Rect(X, y, X + colw, y + f * 1.25), f, "h")
     painter.flush()

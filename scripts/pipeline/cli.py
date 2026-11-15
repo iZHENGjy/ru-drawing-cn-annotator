@@ -142,9 +142,46 @@ def cmd_doctor(a) -> int:
     return doctor_mod.doctor(cfg)
 
 
+def _samples_step(job, a) -> int | None:
+    """Sample pages before the whole volume (docs/pipeline.md "Samples first").  None = go on with the full run."""
+    from . import samples as SM
+    partial = a.pages or a.only or a.until or a.frm or a.dry_run
+    if a.no_samples or partial or job.n_pages <= SM.MIN_PAGES:
+        return None
+    st = SM.load(job)
+    if a.approve_samples:
+        st["approved"] = True
+        SM.save(job, st)
+        print(f"samples approved: {st.get('pages')}  -> running the whole volume")
+        return None
+    if st.get("approved"):
+        return None
+    if not st.get("pages"):
+        ch = SM.choose(job.cfg.pdf, scanned=job.cfg.route == "scan")
+        st = {"pages": ch["pages"], "approved": False}
+        SM.save(job, st)
+    pages = ",".join(str(p) for p in sorted(set(st["pages"].values())))
+    print(f"samples first: {st['pages']}  (one page per kind; --no-samples skips this step)")
+    rc = runner.run_job(job, pages=pages, until="build")
+    if rc == 1:
+        return rc
+    pdf = SM.latest_partial_pdf(job)
+    pngs = SM.export_png(job, st["pages"], pdf) if pdf else []
+    st["png"] = pngs
+    SM.save(job, st)
+    print()
+    print("sample pages written (check them, then run again with --approve-samples):")
+    for p in pngs:
+        print("  " + p)
+    return 3
+
+
 def cmd_run(a) -> int:
     job = _job(a)
     try:
+        rc = _samples_step(job, a)
+        if rc is not None:
+            return rc
         return runner.run_job(job, a.frm, a.only, a.until, a.force, a.pages, a.dry_run)
     except ValueError as e:
         print(f"error: {e}", file=sys.stderr)
@@ -190,6 +227,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--pages", help="e.g. 3,7-9 (page-aware stages only; partial builds go to *_test.pdf)")
     p.add_argument("--force", action="store_true", help="re-run selected stages even if unchanged")
     p.add_argument("--dry-run", action="store_true", help="print the plan and estimated LLM calls")
+    p.add_argument("--approve-samples", action="store_true", help="the sample pages are fine: run the whole volume")
+    p.add_argument("--no-samples", action="store_true", help="skip the sample-pages step (exit 3 otherwise)")
     p.set_defaults(fn=cmd_run)
 
     sub.add_parser("status", parents=[conf], help="stage table from work/job/state.json").set_defaults(fn=cmd_status)

@@ -1022,6 +1022,24 @@ def annotate(doc, pg, mapping, trans, report):
         for t in lsL:
             draws.append(("txt", PW + 14, yy, t, fsL)); yy += fsL * 1.3
 
+    # ---- placement record for the output-standard gates (qa/standard.py); the PDF is not affected
+    import placelog
+    std_ = 2 if std2 else 1
+    for d in draws:
+        if d[0] == "lbl":
+            kind_, fs_, ls_, bb_ = d[1]
+            src_ = d[3]
+            placelog.add(route="scan", pg=pg, kind="label", text=" ".join(ls_), fs=fs_, bb=bb_, src=src_,
+                         vertical=kind_ == "v", leader=bool(d[2]), tb=bool(std2 and tbz and in_tbz(src_)), std=std_)
+        elif d[0] == "blk":
+            for t_, f_, _k in d[2]:
+                placelog.add(route="scan", pg=pg, kind="block", text=t_, fs=f_, std=std_)
+        elif d[0] == "txt":
+            placelog.add(route="scan", pg=pg, kind="column", text=d[3], fs=d[4], y=d[2], std=std_)
+    for q in (mapping.get("paras") or []) if std2 else []:
+        if q.get("kind") != "tb":
+            placelog.add(route="scan", pg=pg, kind="para", ru=q.get("ru") or "", text=q.get("zh") or "", std=std_)
+
     # ---- 绘制 ----
     c = canvas.Canvas(buf, pagesize=(PW + extra_w, PH))
     c.setFillColorRGB(*BLUE); c.setStrokeColorRGB(*BLUE)
