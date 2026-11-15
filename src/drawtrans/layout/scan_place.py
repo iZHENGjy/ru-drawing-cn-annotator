@@ -22,6 +22,7 @@ from reportlab.pdfgen import canvas
 from drawtrans import languages as i18n
 from drawtrans.config import scanroute as C
 from drawtrans.languages import re_src as re  # source-language patterns (unchanged for ru)
+from drawtrans.render import placelog
 
 FONT = "ZH"
 BLUE = (0x00 / 255, 0x2E / 255, 0xBF / 255)
@@ -374,6 +375,8 @@ def annotate(doc, pg, mapping, trans, report):
             items.append(dict(zh=zh, box=bb, src=bb, id=None, ru=e.get("ru"), low=elow))
 
     std2 = int(getattr(CTX.cfg, "output_standard", 1) or 1) >= 2
+    std3 = int(getattr(CTX.cfg, "output_standard", 1) or 1) >= 3     # output standard v2 engine (layout.core)
+    scale3, eng3 = 1.0, None
     prose_col, para_legend = [], []
     for q in (mapping.get("paras") or []) if std2 else []:
         b = q["box"]
@@ -783,22 +786,47 @@ def annotate(doc, pg, mapping, trans, report):
     items = keep
     legend += para_legend + whole
 
-    # 去重:连续行相同译文只标第一行
-    done = []
-    order = sorted(items, key=lambda it: (round(it["box"][1] / 4), it["box"][0]))
-    # 先放普通标签(长的优先占位,短标签更灵活)
-    for it in sorted(order, key=lambda it: -len(it["zh"]) if not it.get("tiny") else 1):
-        x0, y0, x1, y1 = it["box"]
-        lh = max(y1 - y0, 4.0)
-        if any(z == it["zh"] and abs(ax - x0) < 25 and abs(ay - y0) < 2.0 * lh for z, ax, ay in done):
-            done.append((it["zh"], x0, y0)); cov["dup"].append(it["box"]); continue
-        done.append((it["zh"], x0, y0))
-        c, leader = place(it)
-        if c is None:
-            continue
-        cov["placed"].append((it["box"], it["zh"]))
-        pl.add(c[3], pl.plc)
-        draws.append(("lbl", c, leader, it["box"], bool(it.get("low"))))
+    if std3:
+        from drawtrans.layout import scan_v2
+        _sp = fitz.open(CTX.cfg.pdf)[pg - 1]
+        _boxes = list({id(b): b for v in pl.obs.values() for b in v}.values())
+        _need_col = bool(prose_col)
+        for _pass in (0, 1):
+            scale3 = scan_v2.page_scale(PW, PH, big, _need_col)
+            _mark = len(placelog.RECORDS)
+            _cov = {k: (list(v) if isinstance(v, list) else v) for k, v in cov.items()}
+            _draws = []
+            eng3 = scan_v2.make_engine(_sp, PW, PH, _boxes, pl.frame, C.font_file(CTX.cfg), scale3)
+            col_entries, stamp_legend, n_fb = scan_v2.place_items(items, eng3, pl, pg, hmed, big, _cov, _draws)
+            if _pass == 0 and col_entries and not _need_col:
+                del placelog.RECORDS[_mark:]            # a column is needed: the page prints smaller, place again
+                _need_col = True
+                continue
+            break
+        cov.update(_cov)
+        COVER[(doc, pg)] = cov
+        draws += _draws
+        legend += stamp_legend
+        prose_col += col_entries
+        if n_fb:
+            report.append((doc, pg, "编号入栏", str(n_fb)))
+    else:
+        # 去重:连续行相同译文只标第一行
+        done = []
+        order = sorted(items, key=lambda it: (round(it["box"][1] / 4), it["box"][0]))
+        # 先放普通标签(长的优先占位,短标签更灵活)
+        for it in sorted(order, key=lambda it: -len(it["zh"]) if not it.get("tiny") else 1):
+            x0, y0, x1, y1 = it["box"]
+            lh = max(y1 - y0, 4.0)
+            if any(z == it["zh"] and abs(ax - x0) < 25 and abs(ay - y0) < 2.0 * lh for z, ax, ay in done):
+                done.append((it["zh"], x0, y0)); cov["dup"].append(it["box"]); continue
+            done.append((it["zh"], x0, y0))
+            c, leader = place(it)
+            if c is None:
+                continue
+            cov["placed"].append((it["box"], it["zh"]))
+            pl.add(c[3], pl.plc)
+            draws.append(("lbl", c, leader, it["box"], bool(it.get("low"))))
 
     # ---- 栏目对照表(放不下的短栏目) ----
     if toks and not compact:   # 有数量/间距小标注的页:对照行首写明缩写含义
@@ -823,8 +851,13 @@ def annotate(doc, pg, mapping, trans, report):
         ent = [e[1:] if e.startswith("=") else e for e in ent]
         txt = i18n.ui_text("tb_legend", "图签译文:") + ";  ".join(ent)
         best = None
+        if std3:
+            if not scan_v2.place_legend(txt, eng3, tbbox, pl.frame, PW, PH, pg, draws):
+                legend_side = txt
+                report.append((doc, pg, "对照表入加宽栏", txt[:40]))
+            txt = None
         tbw = (tbbox[2] - tbbox[0] - 60) if tbbox else PW * 0.38
-        for wf, fk, ink in ((1.0, 1, 0.004), (1.25, 1, 0.004), (0.8, 1, 0.004), (1.0, 0.85, 0.008), (1.4, 0.8, 0.012), (0.7, 0.75, 0.015), (1.8, 0.7, 0.02)):
+        for wf, fk, ink in (((1.0, 1, 0.004), (1.25, 1, 0.004), (0.8, 1, 0.004), (1.0, 0.85, 0.008), (1.4, 0.8, 0.012), (0.7, 0.75, 0.015), (1.8, 0.7, 0.02)) if txt else ()):
             fsL = (9.0 if big else 6.2) * fk
             bw = tbw * wf
             ls = wrap(txt, fsL, bw); w = max(sw(t, fsL) for t in ls); hh = len(ls) * fsL * 1.2
@@ -842,7 +875,7 @@ def annotate(doc, pg, mapping, trans, report):
         if best:
             pl.add(best[1], pl.plc)
             draws.append(("lbl", ("h", best[3], best[2], best[1]), False, best[1]))
-        else:
+        elif txt:
             legend_side = txt
             report.append((doc, pg, "对照表入加宽栏", txt[:40]))
 
@@ -872,6 +905,8 @@ def annotate(doc, pg, mapping, trans, report):
             cov["notes"].append((hd["x0"] - 4, hd["y0"] - 2, _rx + 4, _ry + 2))
             rh = sorted(d["y1"] - d["y0"] for d in reg) or [hd["y1"] - hd["y0"]]
             fs = max(5.0 if big else 4.0, min(rh[len(rh) // 2] * 0.98, 16 if big else 9.5))
+            if std3:                                   # v2: notes printed >= the preferred label size
+                fs = max(fs, scan_v2.V2.pt(scan_v2.V2.label_pref_min, scale3))
             paras = []
             for b in blks:
                 hz = re.sub(r"[（(](俄文|俄文原文|俄文版)[)）]", "", clean(b.get("heading_zh") or "说明")).strip() or "说明"
@@ -978,11 +1013,15 @@ def annotate(doc, pg, mapping, trans, report):
     # 成段文字(output_standard 2):右侧拓展栏,逐段与俄文段落顶部对齐,整句
     if prose_col:
         colw = (PW * 0.62) if not big else min(PW * 0.3, 900)
+        if std3:
+            colw = scan_v2.column_width(PW, big)
         extra_w = max(extra_w, colw + 20)
         X = PW + 14
         taken = [(d[2], d[2] + d[4] * 1.3) for d in draws if d[0] == "txt"]
         fsP = 12.0 if big else 9.0
-        for scale in (1.0, 0.94, 0.89):
+        if std3:
+            fsP = scan_v2.V2.pt(scan_v2.V2.column_pref, scale3)
+        for scale in ((1.0, 0.94, 0.89) if not std3 else (1.0, 0.86, scan_v2.V2.column_floor / scan_v2.V2.column_pref)):
             f = fsP * scale; out = []; ycur = 18.0
             for top, zh in sorted(prose_col):
                 ls = wrap(zh, f, colw - 10); hh = len(ls) * f * 1.3
@@ -1000,6 +1039,8 @@ def annotate(doc, pg, mapping, trans, report):
     # 图签对照行在图面放不下 → 放到右侧加宽栏底部(没有加宽栏就新开一栏)
     if legend_side:
         fsL = 9 if big else 6.5
+        if std3:
+            fsL = scan_v2.V2.pt(scan_v2.V2.legend_floor, scale3)
         colw2 = (PW * 0.62) if not big else min(PW * 0.3, 900)
         if not extra_w:
             extra_w = colw2 + 20
@@ -1023,9 +1064,10 @@ def annotate(doc, pg, mapping, trans, report):
             draws.append(("txt", PW + 14, yy, t, fsL)); yy += fsL * 1.3
 
     # ---- placement record for the output-standard gates (qa/standard.py); the PDF is not affected
-    from drawtrans.render import placelog
-    std_ = 2 if std2 else 1
+    std_ = 3 if std3 else (2 if std2 else 1)
     for d in draws:
+        if d[0] == "lbl" and std3:
+            continue                                   # recorded with tier / clearance by scan_v2
         if d[0] == "lbl":
             kind_, fs_, ls_, bb_ = d[1]
             src_ = d[3]
@@ -1035,7 +1077,8 @@ def annotate(doc, pg, mapping, trans, report):
             for t_, f_, _k in d[2]:
                 placelog.add(route="scan", pg=pg, kind="block", text=t_, fs=f_, std=std_)
         elif d[0] == "txt":
-            placelog.add(route="scan", pg=pg, kind="column", text=d[3], fs=d[4], y=d[2], std=std_)
+            placelog.add(route="scan", pg=pg, kind="column", text=d[3], fs=d[4], y=d[2], std=std_,
+                         **({"ps": scan_v2.page_scale(PW, PH, big, True), "role": "column"} if std3 else {}))
     for q in (mapping.get("paras") or []) if std2 else []:
         if q.get("kind") != "tb":
             placelog.add(route="scan", pg=pg, kind="para", ru=q.get("ru") or "", text=q.get("zh") or "", std=std_)
@@ -1083,6 +1126,9 @@ def annotate(doc, pg, mapping, trans, report):
         elif d[0] == "txt":
             _, X, yy, t, f = d
             c.setFont(FONT, f); c.drawString(X, Y(yy + f * 0.95), t)
+        elif d[0] == "seg":                            # v2 leader: end points on the two boxes' edges
+            (sx, sy), (tx, ty) = d[1], d[2]
+            c.setLineWidth(0.3); c.line(sx, Y(sy), tx, Y(ty))
     if extra_w:
         c.setLineWidth(0.6)
         c.line(PW + 4, 10, PW + 4, PH - 10)

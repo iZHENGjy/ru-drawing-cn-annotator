@@ -22,11 +22,25 @@ from collections import defaultdict
 from pathlib import Path
 
 from drawtrans import languages as i18n  # noqa: E402
+from drawtrans.layout.policy import V2  # noqa: E402
 
-COLUMN_FLOOR = 6.4
+COLUMN_FLOOR = 6.4                      # output standard 2 (PDF pt)
 LABEL_FLOOR = 4.0
+# output standard 3: printed sizes and leader limits come from layout.policy (the engine's numbers)
+LEADER_MAX_SMALL, LEADER_MAX_LARGE = V2.leader_max_small, V2.leader_max_large
+LEADERS_PER_PAGE, LEADER_MEAN_MAX, LEADER_SHARE_MAX = V2.leaders_per_page, V2.leader_mean_max, V2.leader_share_max
+
+
+def policy_floor(std: int, scale: float, kind: str = "label") -> float:
+    """printed floor of a placement kind under standard ``std`` (3: layout.policy)."""
+    if int(std or 1) < 3:
+        return LABEL_FLOOR * scale
+    return {"label": V2.label_floor, "column": V2.column_floor, "legend": V2.legend_floor,
+            "stamp": V2.stamp_floor, "marker": V2.label_floor}.get(kind, V2.label_floor)
+
+
 SENT_END = re.compile(r"[.!?:;。！？：；…)\]»\"”]\s*$")
-RULES = ("above", "split_paragraph", "title_block_cell", "row_number", "font_floor")
+RULES = ("above", "split_paragraph", "title_block_cell", "row_number", "font_floor", "leader", "occlusion")
 
 
 def _starts_lower(t: str) -> bool:
@@ -48,7 +62,30 @@ def check(items: list[dict]) -> dict:
     for it in items:
         by_pg[it.get("pg")].append(it)
     for pg, its in by_pg.items():
+        v3 = [it for it in its if (it.get("std") or 1) >= 3]
+        for it in v3:                                     # standard 3: printed size, occlusion, leaders
+            ps, fs = float(it.get("ps") or 1.0), it.get("fs")
+            role = it.get("role") or ("column" if it.get("kind") == "column" else "label")
+            if fs is not None and fs * ps < policy_floor(3, ps, role) - 1e-3:
+                hit("font_floor", it, f"{role} prints at {fs * ps:.2f} pt < {policy_floor(3, ps, role)}")
+            if it.get("rule_px", 0) > 0 or it.get("ink", 0) > V2.ink_box + 1e-9:
+                hit("occlusion", it, f"rule px {it.get('rule_px', 0)}, ink {it.get('ink', 0)}")
+            bb, src = it.get("bb"), it.get("src")
+            if it.get("kind") == "label" and role == "label" and bb and src:
+                xov = min(bb[2], src[2]) - max(bb[0], src[0])
+                if bb[3] <= src[1] + 0.5 and xov > 0:
+                    hit("above", it, f"label bottom {bb[3]} above source top {src[1]}")
+            if it.get("tb"):
+                hit("title_block_cell", it, "title-block field translated in its cell")
+            L = it.get("leader_len")
+            if L is not None and L > (it.get("leader_max") or LEADER_MAX_SMALL) + 1e-6:
+                hit("leader", it, f"leader {L:.1f} pt > {it.get('leader_max')}")
+        nl = sum(1 for it in v3 if it.get("leader_len") is not None)
+        if nl > LEADERS_PER_PAGE:
+            hit("leader", {"pg": pg, "std": 3, "text": ""}, f"{nl} leaders on the page > {LEADERS_PER_PAGE}")
         for it in its:
+            if (it.get("std") or 1) >= 3:
+                continue
             k = it.get("kind")
             if k == "label":
                 bb, src = it.get("bb"), it.get("src")
@@ -72,6 +109,12 @@ def check(items: list[dict]) -> dict:
             for r, n in list(zip(rows, numbered))[1:]:             # the first row is the header
                 if not n:
                     hit("row_number", r, "table row without its row number")
+    v3all = [it for it in items if (it.get("std") or 1) >= 3 and it.get("kind") == "label" and it.get("role", "label") == "label"]
+    lead = [it["leader_len"] for it in v3all if it.get("leader_len") is not None]
+    if v3all and lead and (len(lead) / len(v3all) > LEADER_SHARE_MAX or sum(lead) / len(lead) > LEADER_MEAN_MAX):
+        hit("leader", {"pg": None, "std": 3, "text": ""},
+            f"leaders {len(lead)}/{len(v3all)} = {len(lead) / len(v3all):.1%} (max {LEADER_SHARE_MAX:.0%}), "
+            f"mean {sum(lead) / len(lead):.1f} pt (max {LEADER_MEAN_MAX})")
     counts = {r: sum(1 for v in viol if v["rule"] == r) for r in RULES}
     return {"ok": not viol, "violations": viol, "advisory": adv[:200], "advisory_n": len(adv), "counts": counts}
 
