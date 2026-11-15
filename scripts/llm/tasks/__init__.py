@@ -62,6 +62,17 @@ class Task:
     def fake(self, payload):
         return self.mod.fake(payload)
 
+    def normalize(self, payload, output):
+        """optional ``normalize(payload, output) -> output`` of the task: mechanical fixes (a format
+        written «А3х3», a decimal comma) applied before validation, so they never cost a retry."""
+        f = getattr(self.mod, "normalize", None)
+        if f is None or not isinstance(output, dict):
+            return output
+        try:
+            return f(payload, output)
+        except Exception:  # noqa: BLE001 - a broken fixer must not hide the answer from the validator
+            return output
+
     def retry_payload(self, payload, output, errors):
         f = getattr(self.mod, "retry_payload", None)
         return f(payload, output, errors) if f else None

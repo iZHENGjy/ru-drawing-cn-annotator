@@ -57,6 +57,7 @@ shared = []                     # read-only TMs of other volumes of the same pro
 glossaries = []                 # the public base glossary is added automatically
 
 [job]
+optimize = true                 # cheaper model for short phrases / title-block-only sheets, text layer instead of images
 max_audit_loops = 2
 visual = false                  # LLM visual review of flagged tiles (costly, optional)
 '''

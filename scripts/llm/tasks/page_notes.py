@@ -63,6 +63,9 @@ def render(payload):
             continue
         out.append("OCR text (hint only):")
         out += [f"  {ln}" for ln in r.get("ocr") or []]
+    if d.get("known"):           # fixed texts of the volume (title-block fields, table headers) already in the TM
+        out.append("")
+        out.append("Already translated in this volume (leave them out of labels): " + "; ".join(d["known"]))
     tail = marks_line(d) + terms_block(d.get("terms"))
     return "\n".join(out) + ("\n\n" + tail if tail else ""), imgs
 
@@ -74,3 +77,35 @@ def validate(payload, output):
 def fake(payload):
     return {"sheet_code": "", "format": "", "title_ru": "", "title_zh": "", "notes": [], "labels": [],
             "issues": ["fake backend: no reading"]}
+
+
+def normalize(payload, output):
+    """Mechanical fixes before validation (each one used to cost a full retry of the sheet):
+    format «А3х3» / «A1 (594x841)» -> A3x3 / A1; decimal commas in Chinese -> points.
+    With [job] optimize, labels that still break a code rule are dropped (the audit re-checks the sheet)."""
+    import re
+    from ..validate import DEC_COMMA, check_against
+    out = dict(output)
+    fmt = str(out.get("format") or "").strip()
+    if fmt and not re.fullmatch(r"([AАaа][0-4](\s?[xх×]\s?\d+)?)?", fmt):
+        m = re.search(r"[AА]\s?([0-4])(?:\s?[xх×]\s?(\d+))?", fmt)
+        out["format"] = ("A" + m.group(1) + ("x" + m.group(2) if m.group(2) else "")) if m else ""
+
+    import i18n
+    keep_comma = i18n.pair().tgt.code not in ("zh", "en")      # ru / de / fr targets write decimal commas
+
+    def fixz(z):
+        if keep_comma:
+            return z
+        return DEC_COMMA.sub(lambda mm: mm.group(1).replace(",", "."), z or "") if isinstance(z, str) else z
+    for k in ("title_zh",):
+        if isinstance(out.get(k), str):
+            out[k] = fixz(out[k])
+    for lst in ("notes", "labels"):
+        if isinstance(out.get(lst), list):
+            out[lst] = [dict(x, zh=fixz(x.get("zh"))) if isinstance(x, dict) else x for x in out[lst]]
+    if payload.get("drop_bad_labels") and isinstance(out.get("labels"), list):
+        marks = payload.get("data", {}).get("marks") or ()
+        out["labels"] = [lb for lb in out["labels"] if not (isinstance(lb, dict) and lb.get("zh") and
+                                                            check_against(lb.get("zh", ""), lb.get("ru", ""), marks))]
+    return out

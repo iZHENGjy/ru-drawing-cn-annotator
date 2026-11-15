@@ -253,8 +253,31 @@ def doubtful_numbers(P: S.Page, tm=None, limit: int = 24):
     return out
 
 
-def page_notes(ctx, pg: int, tm=None, out_dir: Path | None = None) -> dict:
-    """Payload for task page_notes: {"data": {...}, "images": [Path, ...]}."""
+def text_layer_lines(pdf, pg: int, min_chars: int = 30, ocr_lines=None):
+    """[(box as page fractions, text)] of the PDF text layer of page pg, or None when the page has none:
+    fewer than ``min_chars`` source-language characters, or (``ocr_lines`` given) the text layer holds less
+    than 80 % of what OCR reads on the page (a scan with a stamp or a partial text layer)."""
+    import pymupdf
+    page = pymupdf.open(pdf)[pg - 1]
+    W, H = page.rect.width, page.rect.height
+    n = len(S.CYR.findall(page.get_text() or ""))
+    if n < min_chars:
+        return None
+    if ocr_lines is not None and n < 0.8 * sum(len(S.CYR.findall(d["text"])) for d in ocr_lines):
+        return None
+    out = []
+    for b in page.get_text("dict").get("blocks", []):
+        for ln in b.get("lines", []):
+            t = " ".join(s["text"] for s in ln.get("spans", [])).strip()
+            if t:
+                x0, y0, x1, y1 = ln["bbox"]
+                out.append(((x0 / W, y0 / H, x1 / W, y1 / H), t))
+    return out
+
+
+def page_notes(ctx, pg: int, tm=None, out_dir: Path | None = None, text_layer: bool = False) -> dict:
+    """Payload for task page_notes: {"data": {...}, "images": [Path, ...]}.
+    ``text_layer``: a page with a text layer sends its exact text and no images (cost option)."""
     from PIL import Image
     Image.MAX_IMAGE_PIXELS = None
     P = S.load_page(ctx, pg)
@@ -265,8 +288,11 @@ def page_notes(ctx, pg: int, tm=None, out_dir: Path | None = None) -> dict:
     tb = title_block(P, getattr(ctx.cfg, "title_code_regex", ""))
     regs = notes_regions(P, tb)
     images: list[Path] = []
+    tl = text_layer_lines(ctx.cfg.pdf, pg, ocr_lines=P.lines) if text_layer else None
 
     def save(ims, tag):
+        if tl is not None:                     # the text layer is exact: no image needed
+            return []
         idx = []
         for k, im in enumerate(ims):
             fn = out_dir / f"p{pg:02d}_{tag}{k + 1}.png"
@@ -274,11 +300,13 @@ def page_notes(ctx, pg: int, tm=None, out_dir: Path | None = None) -> dict:
         return idx
 
     def ocr_in(box):
-        tl = [d["text"] for d in sorted(P.lines, key=lambda d: (d["box"][1], d["box"][0]))
+        if tl is not None:
+            return [t for b, t in sorted(tl, key=lambda x: (x[0][1], x[0][0])) if S.ov(b, box) >= 0.6]
+        tl_ = [d["text"] for d in sorted(P.lines, key=lambda d: (d["box"][1], d["box"][0]))
               if S.ov(d["box"], box) >= 0.6]
         extra = [r["text"] for r in P.rapid if S.ov(r["box"], box) >= 0.6 and S.cyr_count(r["text"]) >= 2
                  and sum(S.ov(r["box"], d["box"]) for d in P.lines) < 0.5]
-        return tl + [f"[rapid] {t}" for t in extra]
+        return tl_ + [f"[rapid] {t}" for t in extra]
 
     regions = [dict(kind="title_block", images=save(_crop(png, P, tb), "tb"), ocr=ocr_in(tb))]
     for j, r in enumerate(regs, 1):
@@ -296,4 +324,17 @@ def page_notes(ctx, pg: int, tm=None, out_dir: Path | None = None) -> dict:
         regions.append(dict(kind="number_check", images=save(_sheet(snips), "num"), items=nums))
     data = dict(page=pg, page_mm=[round(P.W / MM), round(P.H / MM)], regions=regions,
                 expect_notes=bool(regs))
+    if tl is not None:
+        data["source"] = "text_layer"
+    if text_layer and tm is not None:          # cost option: fixed texts translated once per volume
+        from engine import tm as T
+        known = []
+        for r in regions:
+            for ln in r.get("ocr") or []:
+                t = ln.replace("[rapid] ", "").strip()
+                h = tm.lookup(T.make_key(S.norm(t))[0], fuzzy=False) if t else None
+                if h is not None and h.action == "translate" and t not in known:
+                    known.append(t)
+        if known:
+            data["known"] = known[:80]
     return dict(data=data, images=images)

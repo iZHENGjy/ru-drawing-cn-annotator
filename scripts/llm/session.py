@@ -103,9 +103,14 @@ class Session:
         spec = T.get(task)
         if not payloads:
             return []
-        with ThreadPoolExecutor(max_workers=min(self.concurrency, len(payloads))) as ex:
-            futs = [ex.submit(self._one, spec, p, str(i)) for p, i in zip(payloads, ids)]
-            return [f.result() for f in futs]
+        # prompt-cache warm-up: the first call runs alone, so the parallel calls after it read the cached
+        # system prompt instead of each writing it (a cache write costs ~12x a cache read)
+        first = self._one(spec, payloads[0], str(ids[0]))
+        if len(payloads) == 1:
+            return [first]
+        with ThreadPoolExecutor(max_workers=min(self.concurrency, len(payloads) - 1)) as ex:
+            futs = [ex.submit(self._one, spec, p, str(i)) for p, i in zip(payloads[1:], ids[1:])]
+            return [first] + [f.result() for f in futs]
 
     # ------------------------------------------------------------------ internals
     def _one(self, spec, payload: dict, item: str) -> Result:
@@ -115,7 +120,7 @@ class Session:
             return Result(id=item, ok=False, errors=[f"internal error: {type(e).__name__}: {e}"])
 
     def _one_inner(self, spec, payload: dict, item: str) -> Result:
-        model = self.model_for(spec.name)
+        model = payload.get("model") or self.model_for(spec.name)     # per-payload routing ([job] optimize)
         system = spec.system(self.background)
         images = [Path(p) for p in payload.get("images") or []]
         key = make_key(spec.name, spec.prompt_version, model, payload.get("data"), images,
@@ -160,6 +165,7 @@ class Session:
                 errs = [reply.error]
             else:
                 merged = spec.merge(prev, reply.output) if cur is not payload else reply.output
+                merged = spec.normalize(payload, merged)      # deterministic fixes instead of a paid retry
                 errs = spec.validate(payload, merged)
             self._ledger(dict(task=spec.name, item=item, model=model, backend=self.backend_name, cached=False,
                               attempt=attempt, ok=not errs, usage=reply.usage, images=len(imgs),

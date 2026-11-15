@@ -38,6 +38,8 @@ JOB_DEFAULTS = {
     "batch_size": 60,         # phrase_translate items per LLM call
     "english": "keep",        # text route: --english keep|replace
     "batch": "review/batch.tsv",   # text route: translated batch for 40_merge_tm.py
+    "optimize": False,        # cost options (docs/pipeline.md "Cost"): new projects get true from rudraw init
+    "cheap_model": "haiku",   # model for the simple calls when optimize is on
 }
 
 

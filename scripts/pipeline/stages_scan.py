@@ -115,7 +115,17 @@ def run_translate(sc: StageCtx):
     still = [it for it in misses if not store.lookup(it["key"], fuzzy=False)]     # resume: already stored
     if not still:
         return {"misses": len(misses), "calls": 0, "already_in_tm": len(misses)}
-    payloads, ids = store.batches(still, int(sc.cfg.job["batch_size"]), "")       # background: system prompt
+    bs = int(sc.cfg.job["batch_size"])
+    if sc.cfg.job.get("optimize"):          # short labels go together to the cheap model
+        short = [it for it in still if len(it["key"].split()) <= 3 and len(it["key"]) <= 32]
+        long_ = [it for it in still if not (len(it["key"].split()) <= 3 and len(it["key"]) <= 32)]
+        payloads, ids = store.batches(long_, bs, "")
+        p2, i2 = store.batches(short, max(bs, 150), "")    # short labels: bigger batches, fewer calls
+        for p in p2:
+            p["model"] = sc.cfg.job.get("cheap_model") or "haiku"
+        payloads += p2; ids += [i.replace("tr", "ts") for i in i2]
+    else:
+        payloads, ids = store.batches(still, bs, "")       # background: system prompt
     sess = sc.session()
     results = sess.run("phrase_translate", payloads, ids)
     vmod = lazy("llm.validate", "translate")
@@ -143,22 +153,66 @@ def run_notes(sc: StageCtx):
     packets = lazy("scan.packets", "notes")
     store = _tm_store(sc)
     pages, payloads, ids = [], [], []
+    opt = bool(sc.cfg.job.get("optimize"))
+    cheap = sc.cfg.job.get("cheap_model") or "haiku"
+    routed = 0
     for pg in sc.page_list():
-        p = packets.page_notes(sc.job.ctx, pg, tm=store)
+        p = packets.page_notes(sc.job.ctx, pg, tm=store, text_layer=opt)
         if p is None:
             continue
+        if opt:
+            p["drop_bad_labels"] = True         # a label that breaks a code rule is dropped, not re-asked
+        if opt and not p["data"].get("expect_notes") and not any(r["kind"] == "number_check" for r in p["data"]["regions"]):
+            p["model"] = cheap                  # title block only: the cheap model reads it
+            routed += 1
         pages.append(pg); payloads.append(p); ids.append(f"p{pg:02d}")
+    reuse = _notes_reuse(pages, payloads, cheap) if opt else {}
     fn = _jf(sc.job, "notes_results.json")
     data = json.loads(fn.read_text(encoding="utf-8")) if fn.exists() else {}
     results = sc.session().run("page_notes", payloads, ids) if payloads else []
     for pg, r in zip(pages, results):
         if r.ok and r.output is not None:
             data[str(pg)] = r.output
+    for pg, rep in reuse.items():          # the same notes block as an earlier sheet: its notes, this sheet's title
+        if str(pg) in data and str(rep) in data:
+            data[str(pg)] = dict(data[str(pg)], notes=data[str(rep)].get("notes") or [], notes_from=rep)
     sc.job.job_dir.mkdir(parents=True, exist_ok=True)
     fn.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
-    m = {"pages": len(pages), "have": len(data), **summarize_results(results)}
+    m = {"pages": len(pages), "have": len(data), "cheap_model_pages": routed + len(reuse), "notes_reused": len(reuse),
+         "text_layer_pages": sum(1 for p in payloads if p["data"].get("source") == "text_layer"), **summarize_results(results)}
     fail_on_bad(results, "page_notes")
     return m
+
+
+def _notes_sig(p) -> str:
+    t = " ".join(ln for r in p["data"]["regions"] if r["kind"] in ("notes", "notes_en") for ln in r.get("ocr") or [])
+    return re.sub(r"\s+", " ", t.replace("[rapid] ", "")).strip().lower()
+
+
+def _notes_reuse(pages, payloads, cheap) -> dict:
+    """{page: earlier page} for sheets whose notes block reads the same as an earlier sheet's (fixed content of
+    the volume, translated once).  Those sheets keep only the title block (+ number check) for the cheap model."""
+    import difflib
+    reps, reuse = [], {}
+    for pg, p in zip(pages, payloads):
+        sig = _notes_sig(p)
+        if len(sig) < 80:
+            continue
+        hit = next((rp for rp, rs in reps if abs(len(rs) - len(sig)) < 0.08 * len(sig)
+                    and difflib.SequenceMatcher(None, rs, sig, autojunk=False).ratio() >= 0.95), None)
+        if hit is None:
+            reps.append((pg, sig)); continue
+        reuse[pg] = hit
+        keep = [r for r in p["data"]["regions"] if r["kind"] not in ("notes", "notes_en")]
+        used = sorted({i for r in keep for i in r.get("images") or []})
+        remap = {old: new for new, old in enumerate(used)}
+        for r in keep:
+            r["images"] = [remap[i] for i in r.get("images") or []]
+        p["images"] = [p["images"][i] for i in used]
+        p["data"]["regions"] = keep
+        p["data"]["expect_notes"] = False
+        p["model"] = cheap
+    return reuse
 
 
 def run_automap(sc: StageCtx):
