@@ -5,13 +5,12 @@ import json
 from pathlib import Path
 
 import pytest
-from conftest import ROOT
 
-from scan import ctx as C
-from scan import automap as A
-from scan import packets as K
-from scan import segments as S
-from scan import tmstore as TS
+from drawtrans.config import scanroute as C
+from drawtrans.memory import automap as A
+from drawtrans.memory import store as TS
+from drawtrans.segment import packets as K
+from drawtrans.segment import segments as S
 
 W, H = 1240, 1754                     # 300 dpi pixels of a small synthetic sheet
 HEAD = "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n"
@@ -235,9 +234,7 @@ def test_page_notes_packet(proj, tmp_path):
 
 
 def test_audit_name_skip_is_fuzzy():
-    spec = importlib.util.spec_from_file_location("audit30", ROOT / "scripts" / "scan" / "30_audit.py")
-    m = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(m)
+    m = importlib.import_module("drawtrans.qa.audit")
     skip = m.make_auto_skip(C.ScanConfig(names=["Борисова"]))
     assert skip("Бописова") == "人名/标识"                             # п read for р
     assert skip("Борисова") == "人名/标识"

@@ -6,10 +6,11 @@ import re
 
 import pymupdf
 import pytest
-from conftest import ROOT
-from test_scan import load_step, proj  # noqa: F401  (proj: synthetic scan project fixture)
 
-from scan import appendix, engine
+from conftest import ROOT
+from drawtrans.layout import scan_place as engine
+from drawtrans.render import appendix
+from test_scan import load_step, proj  # noqa: F401  (proj: synthetic scan project fixture)
 
 
 def ids(hits):
@@ -42,7 +43,7 @@ def test_data_files_wellformed():
         if r["level"] == "无直接对应":
             assert r["cn"] == "—"            # never an invented counterpart
     for fn in ("ref_materials.json", "ref_standards.json"):
-        assert json.loads((ROOT / "glossary" / fn).read_text(encoding="utf-8"))["disclaimer"] == appendix.DISCLAIMER
+        assert json.loads((ROOT / "glossary" / "ru-zh" / fn).read_text(encoding="utf-8"))["disclaimer"] == appendix.DISCLAIMER
 
 
 def test_appendix_selects_rows_by_detected_grades():

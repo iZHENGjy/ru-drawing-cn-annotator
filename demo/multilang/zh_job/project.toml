@@ -1,0 +1,36 @@
+# rudraw project (PDF with a text layer).  Run:  python <repo>/scripts/rudraw.py doctor / run --dry-run / run
+[project]
+name = "zh_text"
+pdf = "../zh_text.pdf"
+source_lang = "zh"              # ISO 639-1: ru en kk uk de fr zh
+target_lang = "en"
+tm = "dict/tm.json"
+review_dir = "review"
+output_dir = "output"
+extract_dir = "extract"
+# font = "C:/Windows/Fonts/simhei.ttf"
+# notes_pages = "3,4"
+
+[keep]
+names = []
+acronyms = []
+
+[llm]
+backend = "claude-cli"          # claude-cli | anthropic | fake
+concurrency = 4
+budget_usd = 0.4                 # hard stop before exceeding
+background = ""                 # project background for the translator (keep private)
+[llm.models]
+phrase_translate = "sonnet"
+page_notes = "sonnet"
+audit_review = "haiku"
+visual_review = "sonnet"
+
+[tm]
+project = "tm/project.json"     # written by the run
+shared = []                     # read-only TMs of other volumes of the same project
+glossaries = []                 # the public base glossary is added automatically
+
+[job]
+max_audit_loops = 2
+visual = false                  # LLM visual review of flagged tiles (costly, optional)

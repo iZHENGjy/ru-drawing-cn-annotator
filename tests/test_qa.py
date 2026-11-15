@@ -8,10 +8,12 @@ import sys
 import numpy as np
 import pymupdf
 import pytest
+
 from conftest import ROOT
 
-sys.path.insert(0, str(ROOT / "scripts"))
-from qa import common as K, determinism, metrics, occlusion, regress  # noqa: E402
+sys.path.insert(0, str(ROOT / "src"))
+from drawtrans.qa import common as K  # noqa: E402
+from drawtrans.qa import determinism, metrics, occlusion, regress
 
 BLUE = (0x00 / 255, 0x2E / 255, 0xBF / 255)
 W, H, DPI = 420, 300, 150
@@ -151,6 +153,7 @@ def test_regress_judge_rules():
     assert j("leaders", 199, 197, tol=5) == "equal"
 
 
+@pytest.mark.e2e
 def test_regress_compare_and_cli(tmp_path):
     base = dict(pages=3, zh_chars=1000, leaders=5, unplaced=0, audit_remaining=0, font_min=4.5, text_sha256="a")
     same = dict(base)
@@ -174,6 +177,7 @@ def test_regress_compare_and_cli(tmp_path):
     assert bad.returncode == 1 and "REGRESSION" in bad.stdout
 
 
+@pytest.mark.e2e
 def test_metrics_cli(synth, tmp_path):
     (src, out), _ = synth
     js = tmp_path / "m.json"

@@ -1,0 +1,254 @@
+"""rudraw command line: doctor | init | run | status | cost."""
+from __future__ import annotations
+
+import argparse
+import re
+import sys
+from pathlib import Path
+
+from drawtrans import languages as i18n
+from drawtrans.config.job import JobConfig
+
+from . import cost, runner
+from . import doctor as doctor_mod
+from .core import Job
+
+TEXT_MIN_CHARS = 25        # a page with at least this many extractable characters "has a text layer"
+
+
+def detect_route(pdf: Path, sample: int = 12) -> dict:
+    """Sample pages with PyMuPDF text extraction: text layer vs image-only scan."""
+    import pymupdf
+    doc = pymupdf.open(pdf)
+    n = doc.page_count
+    idx = sorted({int(i * (n - 1) / max(1, min(sample, n) - 1)) for i in range(min(sample, n))}) if n > 1 else [0]
+    with_text, chars, cyr = 0, 0, 0
+    for i in idx:
+        t = doc[i].get_text() or ""
+        k = len(re.sub(r"\s", "", t))
+        chars += k
+        cyr += len(i18n.SRC_CHAR.findall(t))
+        with_text += k >= TEXT_MIN_CHARS
+    route = "text" if with_text * 2 > len(idx) else "scan"
+    return {"route": route, "pages": n, "sampled": len(idx), "pages_with_text": with_text,
+            "chars": chars, "cyrillic_chars": cyr}
+
+
+def _pdf_ref(folder: Path, pdf: Path) -> str:
+    try:
+        return pdf.resolve().relative_to(folder.resolve()).as_posix()
+    except ValueError:
+        return pdf.resolve().as_posix()
+
+
+COMMON_TAIL = '''
+[llm]
+backend = "claude-cli"          # claude-cli | anthropic | fake
+concurrency = 4
+budget_usd = 20                 # hard stop before exceeding
+background = ""                 # project background for the translator (keep private)
+[llm.models]
+phrase_translate = "sonnet"
+page_notes = "sonnet"
+audit_review = "haiku"
+visual_review = "sonnet"
+
+[tm]
+project = "tm/project.json"     # written by the run
+shared = []                     # read-only TMs of other volumes of the same project
+glossaries = []                 # the public base glossary is added automatically
+
+[job]
+optimize = true                 # cheaper model for short phrases / title-block-only sheets, text layer instead of images
+max_audit_loops = 2
+visual = false                  # LLM visual review of flagged tiles (costly, optional)
+'''
+
+
+def skeleton(route: str, name: str, pdf_ref: str, code: str, src: str = "ru", tgt: str = "zh") -> str:
+    langs = (f'source_lang = "{src}"              # ISO 639-1: ru en kk uk de fr zh\n'
+             f'target_lang = "{tgt}"\n')
+    if route == "scan":
+        head = f'''# rudraw project (scanned PDF).  Run:  python <repo>/scripts/rudraw.py doctor / run --dry-run / run
+[project]
+name = "{name}"
+pdf = "{pdf_ref}"
+{langs}
+[scan]
+pdf = "{pdf_ref}"
+code = "{code}"                  # short tag for output names
+work = "work"                    # png/ ocr/ lines/ rapid/ notes/ map/ ... and job/ (state, logs, ledger)
+output = "output"
+output_standard = 2              # docs/output_standard.md: labels below, extension column, one title-block legend line
+quality_rules = true             # labels over 2-3 lines as one phrase; «Лист» in headers = 页, not 钢板
+# tessdata = "tessdata"          # folder with rus.traineddata (tessdata_best) + configs/
+# count_word = "根"               # 件 for embedded items / parts volumes
+# title_code_regex = "^XXXX-"
+# skip_regex = ""
+# font = "C:/Windows/Fonts/simhei.ttf"
+
+[keep]
+names = []                       # signatures, designer logo: never translated, never audited
+acronyms = []
+'''
+    else:
+        head = f'''# rudraw project (PDF with a text layer).  Run:  python <repo>/scripts/rudraw.py doctor / run --dry-run / run
+[project]
+name = "{name}"
+pdf = "{pdf_ref}"
+{langs}tm = "dict/tm.json"
+review_dir = "review"
+output_dir = "output"
+extract_dir = "extract"
+# font = "C:/Windows/Fonts/simhei.ttf"
+# notes_pages = "3,4"
+
+[keep]
+names = []
+acronyms = []
+'''
+    return head + COMMON_TAIL
+
+
+def cmd_init(a) -> int:
+    folder = Path(a.folder).resolve()
+    pdf = Path(a.pdf).resolve()
+    if not pdf.is_file():
+        print(f"error: PDF not found: {pdf}", file=sys.stderr)
+        return 1
+    i18n.activate(a.src, a.tgt)
+    info = detect_route(pdf)
+    route = a.route if a.route != "auto" else info["route"]
+    target = folder / "project.toml"
+    if target.exists() and not a.force:
+        print(f"error: {target} already exists (use --force to overwrite)", file=sys.stderr)
+        return 1
+    folder.mkdir(parents=True, exist_ok=True)
+    code = a.code or re.sub(r"[^A-Za-z0-9]+", "", pdf.stem)[:8].upper() or "DOC"
+    target.write_text(skeleton(route, a.name or pdf.stem, _pdf_ref(folder, pdf), code, a.src, a.tgt), encoding="utf-8")
+    print(f"{pdf.name}: {info['pages']} page(s), {info['pages_with_text']}/{info['sampled']} sampled with a text layer, "
+          f"{info['cyrillic_chars']} {i18n.pair().src.name} chars ({a.src}->{a.tgt}) -> route: {route}" + ("  (forced)" if a.route != "auto" else ""))
+    print(f"wrote {target}\nnext: python scripts/rudraw.py doctor --config {target}\n"
+          f"      python scripts/rudraw.py run --dry-run --config {target}")
+    return 0
+
+
+def _job(a) -> Job:
+    return Job(JobConfig.load(a.config))
+
+
+def cmd_doctor(a) -> int:
+    cfg = None
+    try:
+        cfg = JobConfig.load(a.config) if (a.config or Path("project.toml").exists()) else None
+    except Exception as e:  # noqa: BLE001
+        print(f"warning: cannot read config: {e}")
+    return doctor_mod.doctor(cfg)
+
+
+def _samples_step(job, a) -> int | None:
+    """Sample pages before the whole volume (docs/pipeline.md "Samples first").  None = go on with the full run."""
+    from . import samples as SM
+    partial = a.pages or a.only or a.until or a.frm or a.dry_run
+    if a.no_samples or partial or job.n_pages <= SM.MIN_PAGES:
+        return None
+    st = SM.load(job)
+    if a.approve_samples:
+        st["approved"] = True
+        SM.save(job, st)
+        print(f"samples approved: {st.get('pages')}  -> running the whole volume")
+        return None
+    if st.get("approved"):
+        return None
+    if not st.get("pages"):
+        ch = SM.choose(job.cfg.pdf, scanned=job.cfg.route == "scan")
+        st = {"pages": ch["pages"], "approved": False}
+        SM.save(job, st)
+    pages = ",".join(str(p) for p in sorted(set(st["pages"].values())))
+    print(f"samples first: {st['pages']}  (one page per kind; --no-samples skips this step)")
+    rc = runner.run_job(job, pages=pages, until="build")
+    if rc == 1:
+        return rc
+    pdf = SM.latest_partial_pdf(job)
+    pngs = SM.export_png(job, st["pages"], pdf) if pdf else []
+    st["png"] = pngs
+    SM.save(job, st)
+    print()
+    print("sample pages written (check them, then run again with --approve-samples):")
+    for p in pngs:
+        print("  " + p)
+    return 3
+
+
+def cmd_run(a) -> int:
+    job = _job(a)
+    try:
+        rc = _samples_step(job, a)
+        if rc is not None:
+            return rc
+        return runner.run_job(job, a.frm, a.only, a.until, a.force, a.pages, a.dry_run)
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+
+
+def cmd_status(a) -> int:
+    job = _job(a)
+    print(f"route {job.cfg.route}, job dir {job.job_dir}\n")
+    print(runner.status_table(job))
+    return 0
+
+
+def cmd_cost(a) -> int:
+    job = _job(a)
+    rep = cost.write_report(job.job_dir, job.n_pages)
+    print(cost.render_md(rep))
+    print(f"written {job.job_dir / 'cost_report.md'} and cost_report.json")
+    return 0
+
+
+def build_parser() -> argparse.ArgumentParser:
+    ap = argparse.ArgumentParser(prog="rudraw", description="Russian drawing -> Chinese annotation pipeline")
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    conf = argparse.ArgumentParser(add_help=False)
+    conf.add_argument("--config", help="project.toml (default ./project.toml)")
+
+    sub.add_parser("doctor", parents=[conf], help="check python deps, tesseract, tessdata, font, claude CLI").set_defaults(fn=cmd_doctor)
+
+    p = sub.add_parser("init", help="create project.toml for a PDF (auto-detects text layer vs scan)")
+    p.add_argument("folder", nargs="?", default=".")
+    p.add_argument("--pdf", required=True)
+    p.add_argument("--route", choices=["auto", "scan", "text"], default="auto")
+    p.add_argument("--name"); p.add_argument("--code")
+    p.add_argument("--src", default="ru", help="source language (ISO 639-1, default ru)")
+    p.add_argument("--tgt", default="zh", help="target language (default zh)")
+    p.add_argument("--force", action="store_true")
+    p.set_defaults(fn=cmd_init)
+
+    p = sub.add_parser("run", parents=[conf], help="run the stages (resumable)")
+    p.add_argument("--from", dest="frm", metavar="STAGE"); p.add_argument("--only", metavar="STAGE")
+    p.add_argument("--until", metavar="STAGE")
+    p.add_argument("--pages", help="e.g. 3,7-9 (page-aware stages only; partial builds go to *_test.pdf)")
+    p.add_argument("--force", action="store_true", help="re-run selected stages even if unchanged")
+    p.add_argument("--dry-run", action="store_true", help="print the plan and estimated LLM calls")
+    p.add_argument("--approve-samples", action="store_true", help="the sample pages are fine: run the whole volume")
+    p.add_argument("--no-samples", action="store_true", help="skip the sample-pages step (exit 3 otherwise)")
+    p.set_defaults(fn=cmd_run)
+
+    sub.add_parser("status", parents=[conf], help="stage table from work/job/state.json").set_defaults(fn=cmd_status)
+    sub.add_parser("cost", parents=[conf], help="cost report from work/job/ledger.jsonl").set_defaults(fn=cmd_cost)
+    return ap
+
+
+def main(argv=None) -> int:
+    for s in (sys.stdout, sys.stderr):
+        try:
+            s.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:  # noqa: BLE001
+            pass
+    a = build_parser().parse_args(argv)
+    try:
+        return int(a.fn(a) or 0)
+    except (FileNotFoundError, ValueError) as e:      # missing file, project.toml problems (config.schema)
+        print(f"error: {e}", file=sys.stderr)
+        return 1

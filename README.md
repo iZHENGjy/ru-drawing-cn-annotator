@@ -25,12 +25,20 @@ keeps the drawing as it is and **adds** the Chinese: blue vector text next to ev
 label, note and table cell (PDF), or a separate `CN_TRANSLATION` layer (DWG/DXF). The result
 prints as one bilingual sheet.
 
+**Other languages.** The language pair is a project setting (`[project] source_lang` / `target_lang`,
+ISO codes): Russian, English, Kazakh, Ukrainian, German, French and Chinese as source or target, e.g.
+`ru→zh` (default), `en→zh`, `kk→zh`, `zh→ru`, `zh→en`, `ru→en`. OCR models, fonts, line breaking, prompts,
+glossaries (`glossary/<src>-<tgt>/`) and the code guards follow the pair; the layout rules stay the same.
+Synthetic demos: `demo/multilang/` (English scan → Chinese, Chinese text layer → English). See
+[docs/pipeline.md](docs/pipeline.md#languages).
+
 ## Production pipeline (one command)
 
 ```bash
-python scripts/rudraw.py doctor                      # check Python deps, Tesseract, font, claude CLI
-python scripts/rudraw.py init my_job --pdf vol1.pdf  # writes project.toml, detects scan vs text layer
-cd my_job && python scripts/rudraw.py run            # resumable; `status` / `cost` show progress and spend
+pip install -e ".[scan]"                         # from a checkout: installs the `drawtrans` command
+drawtrans doctor                                     # check Python deps, Tesseract, font, claude CLI
+drawtrans init my_job --pdf vol1.pdf --src ru --tgt zh   # writes project.toml, detects scan vs text layer
+cd my_job && drawtrans run                           # sample pages first, then --approve-samples; resumable
 ```
 
 A drawing set goes in, a printable bilingual PDF, a cost report and a delivery-gate summary come
@@ -38,35 +46,7 @@ out. Code does everything that has a right answer: OCR, deduplication, translati
 lines to Chinese, placement and checks. The LLM is used only in four narrow tasks, each with a
 fixed input packet, a JSON Schema and a validator. Details: [docs/pipeline.md](docs/pipeline.md).
 
-### Pipeline design
-
-```mermaid
-flowchart LR
-    A[Scanned PDF] --> B[OCR x2<br/>Tesseract + RapidOCR]
-    B --> C[Dedupe the volume<br/>numbers -> ⟨n⟩]
-    C --> D{Translation memory<br/>glossary · other volumes · project}
-    D -- hit --> F
-    D -- new phrases --> E1[🤖 phrase_translate<br/>batches of 60, text only]
-    B --> E2[🤖 page_notes<br/>title + notes crops]
-    E1 --> F[automap<br/>line -> Chinese by code]
-    E2 --> F
-    F --> G[build<br/>placement engine]
-    G --> H[coverage audit]
-    H -- leftovers --> E3[🤖 audit_review<br/>small crops]
-    E3 --> G
-    H --> I[member-mark gate]
-    I --> J[QA: font size,<br/>lines, ink]
-    J -- flagged tiles only --> E4[🤖 visual_review]
-    J --> K[bilingual PDF<br/>+ cost report + gates]
-```
-
-| Guard rail | How |
-|---|---|
-| Numbers | Stored as `⟨n⟩` placeholders; a number enters the Chinese only when both OCR engines read it the same way |
-| Member marks (Км1.2, МН4) | Never fuzzy-matched; OCR letter swaps and dropped dots corrected against the sheet titles; the gate fails on any unknown mark |
-| LLM answers | JSON Schema + validator (placeholders, digits, marks, grades, standards); a rejected answer is retried, never used |
-| Coverage | Every Russian box found by either OCR engine must end up translated, in the legend, or explicitly accepted |
-| Repeatability | Every LLM answer is cached; re-running the same input gives a byte-identical PDF at zero cost |
+Design of the pipeline (stages, constrained LLM tasks, gates): [docs/design.md](docs/design.md#pipeline-design).
 
 ### Sample output (synthetic drawing, scanned route)
 
@@ -106,24 +86,6 @@ Every LLM call is metered (tokens, images, USD) and summarised per stage in
   saving was small.
 - **Budget:** `budget_usd` in `project.toml` stops the run before it is exceeded.
 
-## Highlights
-
-- **Original untouched** – Chinese is an added layer; every line, dimension and Russian word
-  stays where it was, and that is checked on every page.
-- **Numbers cannot be mistranslated** – the translation memory stores numbers as `⟨n⟩`
-  placeholders, so values, ГОСТ/СП numbers, concrete and rebar grades always come from the source.
-- **Layout-aware placement** – rebuilds paragraphs and table cells from the drawing's own rules,
-  finds free space, wraps Chinese by word (jieba), shrinks or uses numbered callouts when space is tight.
-- **Bilingual RU/EN sheets** – optionally removes only the English text layer, glyph by glyph,
-  and sets the Chinese in its place.
-- **DWG/DXF as well** – text inside blocks and rotated text included; an overlay DXF to insert at 0,0.
-- **Scanned PDFs too** – a separate OCR route (Tesseract + RapidOCR) with a coverage audit that
-  proves every detected Russian text region got its Chinese, and a page-by-page visual review
-  loop; see [docs/scanned.md](docs/scanned.md).
-- **QA you can hand to a reviewer** – per-page checks plus an issue list.
-
-Developed on a real commercial translation job. No client material is included: every
-drawing in this repository is synthetic.
 
 ## Demo
 
@@ -158,37 +120,7 @@ Reproduce everything with `python demo/run_demo.py`.
 
 ## How it works
 
-```mermaid
-flowchart LR
-    A[Russian drawing PDF<br/>with text layer] --> B[layout analysis<br/>chars → words → lines → blocks → runs]
-    B --> C[RU/EN pairing<br/>title block vs body context]
-    C --> D{translation memory<br/>numbers as ⟨n⟩ placeholders}
-    D -- missing --> T[tm_todo.json → translate batch<br/>→ 40_merge_tm.py validates]
-    T --> D
-    D -- found --> E[placement<br/>free space / English slot / callout / appendix page]
-    E --> F[blue vector text<br/>original untouched]
-    F --> G[QA report + issue list<br/>Russian intact · numbers & ГОСТ equal · no overlap]
-    H[DWG] -- ODA / LibreDWG --> I[DXF] --> J[collect text in WCS<br/>blocks exploded] --> D
-    D --> K[CN_TRANSLATION layer<br/>+ overlay DXF] --> L[DWG via ODA]
-```
-
-- **Layout analysis** (`scripts/engine/layout.py`) rebuilds lines, paragraphs and table cells
-  from PyMuPDF glyphs, in a rotated frame for vertical text, and uses the drawing's own line art
-  (table rules) to keep cells apart. Every word gets a language: Russian, English or *neutral*
-  (numbers, codes, units, standards, names).
-- **Translation memory** (`scripts/engine/tm.py`) keys are normalised Russian with every number
-  replaced by a placeholder, so `Бетон класса B25` and `Бетон класса B30` share one entry and the
-  numbers in the output always come from the source. Decimal commas become points, except inside
-  codes. Ambiguous words get per-context entries (`@tb|Лист` = sheet no. in the title block,
-  `@body|Лист` = steel plate elsewhere). A small generic ГОСТ/СПДС glossary is included.
-- **Placement** (`scripts/engine/place.py`, `pdf_build.py`) tries, in order: the slot of the
-  removed English (replace mode), free space right / below / above / left of the Russian, a
-  smaller font, a numbered callout (①②…) in the nearest free area, or — for dense numbered
-  notes — an inserted Chinese page after the sheet. Chinese is wrapped with jieba word
-  segmentation, so a line never breaks inside a word, and closing punctuation never starts a line.
-- **QA** on every page: Russian word count unchanged, no English left (replace mode), numbers
-  and standard numbers in the Chinese equal to the Russian, no Chinese over original text or
-  over other Chinese, nothing off the page. `43_issues.py` turns this into a reviewer's list.
+See [docs/design.md](docs/design.md#how-it-works) and the module map in [docs/architecture.md](docs/architecture.md).
 
 ## Quickstart
 
@@ -248,7 +180,7 @@ entry whose placeholders differ from the key or that hard-codes digits.
 
 - **The main route needs a text layer.** Scans and AutoCAD exports where text became SHX vector
   strokes have no extractable text (`01_extract.py` tells you). Use the scanned route
-  (`scripts/scan/`, [docs/scanned.md](docs/scanned.md)) for those: it is OCR-based, so it relies
+  ([docs/scanned.md](docs/scanned.md)) for those: it is OCR-based, so it relies
   on its coverage audit and a human / LLM visual review rather than on exact glyphs.
 - **Not machine translation.** Quality is exactly the quality of your translation memory. The
   automatic QA proves completeness, number/standard consistency and clean layout — not that a
@@ -264,25 +196,7 @@ entry whose placeholders differ from the key or that hard-codes digits.
 
 ## Repository layout
 
-```
-scripts/
-  engine/            layout.py · place.py · tm.py · pdf_build.py · config.py
-  01_extract.py      survey: words per page + census          02_lines.py   unique Russian lines
-  05_volume.py       volume per section                        06_probe_layout.py  dump lines of a page
-  20_build.py        build the Chinese PDF                     30_preview.py  render a page / clip
-  40_merge_tm.py     merge a translated batch (validated)      41_export_todo.py   todo list
-  42_debug_pairs.py  RU/EN pairing diagnostics                 43_issues.py   reviewer's issue list
-  cad/               collect.py · 01_census · 02_blocks · 03_dump_wcs · 04_overview
-                     10_build (DXF layer + overlay) · 20_preview · 30_to_dwg.ps1 (ODA)
-  scan/              scanned PDFs: ctx · engine · 10_ocr · 11_rapid · 12_preview · 20_build
-                     30_audit · 31_apply_audit · 40_tiles · 41_apply_visual · 50_check
-docs/scanned.md      scanned route: pipeline, delivery gates, lessons from a real set
-docs/scanned/        prompts for translators and reviewers (translate, map, audit, visual)
-glossary/            gost_general.json – generic title-block / СПДС glossary
-demo/                synthetic drawing + DXF generators, demo TM, run_demo.py
-tests/               pytest: TM, layout, wrapping, obstacle test, end-to-end no-overlap,
-                     scanned route end-to-end (synthetic scan, audit, mark gate)
-```
+Code in `src/drawtrans/` (one package per domain), docs in `docs/`, public glossaries in `glossary/<src>-<tgt>/`, synthetic demos in `demo/`. Module map, data flow and extension points: [docs/architecture.md](docs/architecture.md). Contributing: [CONTRIBUTING.md](CONTRIBUTING.md); changes: [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 
@@ -314,15 +228,11 @@ included and are only invoked as external programs.
 
 ### 关键设计
 
-- **翻译记忆库，数字用占位符**：`Бетон класса B25` 的键是 `Бетон класса B⟨1⟩`，译文里的数字永远从原文取，
-  不会被翻译改错；小数逗号自动改小数点，代号中的逗号保留。
-- **按位置区分多义词**：`@tb|Лист`（图签里是"张号"）与 `@body|Лист`（正文里是"钢板"）。
-- **中文按词换行**（jieba 分词），句末标点不出现在行首；数字、代号、标准号整体不拆。
-- 自带一份通用 ГОСТ/СПДС 图签与常用术语词表（`glossary/gost_general.json`），项目词库叠加在上面。
+见 [docs/design.md](docs/design.md) 与 [docs/architecture.md](docs/architecture.md)。
 
 ### 生产流水线与成本
 
-- **一条命令**:`python scripts/rudraw.py run` 按阶段跑完一个任务。
+- **一条命令**:`drawtrans run`(旧入口 `python scripts/rudraw.py run` 仍可用)按阶段跑完一个任务,先出样页。
   - 可断点续跑,每个阶段的产物和日志都落盘。
   - 结束时输出中文对照版 PDF、成本报表(`work/job/cost_report.md`)和交付关卡结果。
 - **LLM 只用在 4 处**:新短语翻译、整页标题与说明、审计复核、看图复核(只看 QA 标出的可疑区域)。
@@ -359,7 +269,7 @@ DWG 需先转成 DXF：推荐 ODA File Converter（免费，非开源），或�
 
 ### 局限
 
-- 主流程要求 PDF 有文字层。扫描件请走 `scripts/scan/` 扫描件流程（Tesseract + RapidOCR 双检测、
+- 主流程要求 PDF 有文字层。扫描件请走扫描件流程(docs/scanned.md)（Tesseract + RapidOCR 双检测、
   覆盖率核对必须为 0、构件代号校验、逐页看图复核），说明见 [docs/scanned.md](docs/scanned.md)。
 - 不是机器翻译：译文质量取决于翻译记忆库。自动检查只能证明"不漏、不错数字、不压字"，不能证明译得对，术语需要专业人员审定。
 - 版面规则针对 ГОСТ/СПДС 图纸（水平和 90° 文字、3 号图签）；图签格子很窄时中文会很小或改用圈号。

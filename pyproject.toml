@@ -1,7 +1,11 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
 [project]
-name = "ru-drawing-cn-annotator"
-version = "0.1.0"
-description = "Overlay Chinese translations on Russian engineering drawings (PDF and DWG/DXF) without touching the original"
+name = "drawtrans"
+version = "0.2.0"
+description = "Bilingual editions of engineering drawings and documents (PDF, scans, DWG/DXF): the original stays untouched, the translation is added as a vector layer"
 readme = "README.md"
 license = { text = "MIT" }
 authors = [{ name = "iZHENGjy" }]
@@ -9,11 +13,54 @@ requires-python = ">=3.11"
 dependencies = ["pymupdf>=1.24", "jieba>=0.42", "ezdxf>=1.3", "pdfplumber>=0.11", "matplotlib>=3.8", "numpy>=1.26", "reportlab>=4.0", "pypdf>=4.0", "pillow>=10"]
 
 [project.optional-dependencies]
-dev = ["pytest>=8"]
+dev = ["pytest>=8", "ruff>=0.6", "mypy>=1.10", "pre-commit>=3"]
 scan = ["rapidocr>=3", "onnxruntime>=1.17"]
 # optional: only for [llm] backend = "anthropic" (the default backend claude-cli needs the `claude` CLI instead)
 llm = ["anthropic>=1"]
 
+[project.scripts]
+drawtrans = "drawtrans.pipeline.cli:main"
+rudraw = "drawtrans.pipeline.cli:main"          # former name
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"drawtrans.llm.tasks" = ["*.md"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 filterwarnings = ["ignore::DeprecationWarning"]
+markers = [
+    "e2e: end-to-end runs of the pipeline on synthetic data (subprocesses, a few seconds)",
+    "regression: layout regression against stored layout_sha256 baselines",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+src = ["src", "tests"]
+extend-exclude = ["demo"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B", "I"]
+# The placement engines are dense geometry code written with one-line statements and short names
+# (x0, y0, l); these style rules are off on purpose.  Bug classes (F, B) and import order (I) are on.
+ignore = ["E501", "E701", "E702", "E731", "E741", "B007", "B905", "B023"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["F811"]                 # pytest fixtures imported from another test module
+"scripts/*" = ["E402"]               # compatibility entry points set sys.path first
+"src/drawtrans/cad/*" = ["I001"]     # matplotlib.use("Agg") must run before pyplot is imported
+
+[tool.ruff.lint.isort]
+known-first-party = ["drawtrans"]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+follow_imports = "silent"
+# typed core: languages, paths, config schema, shared types, placement record, output-standard gate
+files = ["src/drawtrans/paths.py", "src/drawtrans/records.py", "src/drawtrans/config/schema.py",
+         "src/drawtrans/render/placelog.py", "src/drawtrans/qa/standard.py", "src/drawtrans/pipeline/samples.py",
+         "src/drawtrans/languages/__init__.py"]

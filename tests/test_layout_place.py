@@ -1,8 +1,10 @@
 import pymupdf
 import pytest
-from engine import layout, place
-from engine.layout import from_frame_rect, to_frame_rect, word_lang
-from engine.place import NO_LINE_START, Obstacles, fit, text_len, wrap
+
+from drawtrans.layout import analyse as layout
+from drawtrans.layout import place
+from drawtrans.layout.analyse import from_frame_rect, to_frame_rect, word_lang
+from drawtrans.layout.place import NO_LINE_START, Obstacles, fit, text_len, wrap
 
 
 @pytest.mark.parametrize("word,lang", [
