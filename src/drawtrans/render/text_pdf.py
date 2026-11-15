@@ -292,7 +292,7 @@ def notes_region(runs, min_lines=4):
 
 # ---------------------------------------------------------------- main
 def build(pdf, pages, out_path, tm: TM, review_dir, notes_mode="inplace", notes_pages=(), dry=False,
-          english="keep", tb_anchors=DEFAULT_TB_ANCHORS, left_stamp=75.0, verbose=True):
+          english="keep", tb_anchors=DEFAULT_TB_ANCHORS, left_stamp=75.0, verbose=True, standard=1):
     """Build the Chinese PDF.  ``pages`` are 1-based page numbers of ``pdf``.
     Returns the per-page report rows (also written to <review_dir>/report.csv)."""
     assert english in ("keep", "replace") and notes_mode in ("inplace", "appendix")
@@ -346,6 +346,12 @@ def build(pdf, pages, out_path, tm: TM, review_dir, notes_mode="inplace", notes_
                 if u.en is not None:
                     u.en, u.mode = None, "insert"
         obs = Obstacles(page, words, segs)
+        eng3 = None                                   # output standard 3: the shared engine (layout.core)
+        fb3 = []
+        if standard >= 3:
+            from drawtrans.layout import text_v2
+            eng3 = text_v2.engine_for(page, words)
+            eng3.set_budget(sum(1 for u in units if u.zh))   # per-page sub-7 pt and leader budgets
 
         # ---- translate
         for u in units:
@@ -514,6 +520,21 @@ def build(pdf, pages, out_path, tm: TM, review_dir, notes_mode="inplace", notes_
                 if place_clauses(painter, list(zip(zh_cl, [slots[a:b] for a, b in groups])), u.en.size * 0.95, o, u):
                     continue
             base = u.en.size * 0.95
+            if eng3 is not None and o == "h":         # v2: the English slot only at allowed sizes, else the engine
+                st3 = text_v2.slot_steps(base, eng3)
+                fs, lines = fit(u.zh, slots, base, steps=st3) if st3 else (None, None)
+                if fs is not None:
+                    for t, sl in zip(lines, slots):
+                        painter.line(t, sl, fs, o); u.placed.append(sl); eng3.b.commit(tuple(sl))
+                    u.status = "ok"
+                else:
+                    rects = text_v2.place_label(eng3, painter, u.zh, u.en.frect, u.en.size, [w.rect for w in u.en.words], pn)
+                    if rects:
+                        u.placed.extend(rects); u.status = "ok"
+                    else:
+                        fb3.append((u.zh, tuple(u.en.frect), " ".join(w.text for w in u.en.words))); u.status = "column"
+                reserve(obs, u.placed, o)
+                continue
             fs, lines = fit(u.zh, slots, base)
             if fs is None:
                 pitch = slots[1].y0 - slots[0].y0 if len(slots) > 1 else slots[0].height * 1.15
@@ -569,6 +590,15 @@ def build(pdf, pages, out_path, tm: TM, review_dir, notes_mode="inplace", notes_
                 continue
             o = u.ru.orient
             ign = redacted | {id(w) for w in u.ru.words}
+            if eng3 is not None and o == "h":         # v2: the shared engine, never above, numbered column last
+                rects = text_v2.place_label(eng3, painter, u.zh, u.ru.frect, u.ru.size, [w.rect for w in u.ru.words], pn)
+                if rects:
+                    u.placed.extend(rects); u.status = "ok"; reserve(obs, rects, o)
+                elif pn in notes_pages:
+                    to_list.append(u); u.status = "appendix"
+                else:
+                    fb3.append((u.zh, tuple(u.ru.frect), join_ru(u.ru))); u.status = "column"
+                continue
             fs, lines, slots = place_insert(u, obs, ign, o)
             if fs is None and pn in notes_pages:
                 # prose page with an inserted Chinese page: a label that has no room beside its
@@ -607,6 +637,8 @@ def build(pdf, pages, out_path, tm: TM, review_dir, notes_mode="inplace", notes_
             for b in boxes:
                 painter.line("本栏中文译文见本页后所附译文页，按条号对照。", pymupdf.Rect(b.x0, b.y0, b.x1, b.y0 + 16), 13, "h")
         painter.flush()
+        if fb3:                                       # v2: numbered markers + extension column
+            text_v2.column(page, painter, eng3, fb3, pn)
 
         # ---- QA
         after_words = page_words(page)

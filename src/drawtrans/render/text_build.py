@@ -51,7 +51,8 @@ def main(argv=None):
     notes_pages = a.notes_pages if a.notes_pages is not None else cfg.notes_pages
     build(pdf, pages, str(out), tm, cfg.review, notes_mode=a.notes,
           notes_pages=set(parse_pages(notes_pages, n)) if notes_pages else set(),
-          dry=a.dry, english=a.english, tb_anchors=cfg.tb_anchors, left_stamp=cfg.left_stamp)
+          dry=a.dry, english=a.english, tb_anchors=cfg.tb_anchors, left_stamp=cfg.left_stamp,
+          standard=cfg.output_standard)
 
 
 if __name__ == "__main__":

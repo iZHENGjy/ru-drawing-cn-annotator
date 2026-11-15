@@ -96,7 +96,8 @@ acronyms = []
 [project]
 name = "{name}"
 pdf = "{pdf_ref}"
-{langs}tm = "dict/tm.json"
+{langs}output_standard = 3            # docs/output_standard.md §8 (layout v2)
+tm = "dict/tm.json"
 review_dir = "review"
 output_dir = "output"
 extract_dir = "extract"

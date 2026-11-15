@@ -123,6 +123,12 @@ print factor (`Policy.scale`).
 | extension column | 0.35 × page width (≤ 900 pt), 9 pt printed, steps 0.89 / 0.8 down to 6.5 pt |
 | count labels (шт./pcs.) | placed when there is room; otherwise only the legend explains them |
 
+Both routes use the same engine: the scan route through `layout/scan_v2.py` (reportlab drawing), the
+text-layer route through `layout/text_v2.py` (PyMuPDF drawing; text projects set `[project] output_standard = 3`).
+In the text route an English slot is filled only at allowed sizes; otherwise the label goes through the engine
+like a Russian-only label. Table rows that have to leave their cells are listed in the column between the
+row's continued rules (`scan_v2.layout_rows`); notes clauses and the legend flow in the column without overlap.
+
 QA under standard 3 (gate `output_standard`): `font_floor` (printed size by role), `occlusion` (rule pixels or
 ink in the placed box), `leader` (length, count per page, volume share and mean), `above`, `title_block_cell`.
 The visual review samples QA tiles evenly over the pages (`pipeline.stages_scan.sample_tiles`).

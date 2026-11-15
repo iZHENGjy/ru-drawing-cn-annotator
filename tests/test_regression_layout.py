@@ -65,3 +65,23 @@ def test_private_approved_layouts(tmp_path):
         assert r.returncode == 0, r.stdout[-1500:] + r.stderr[-1500:]
         pdf = next(p for p in (s / "output").glob("*_中文对照版.pdf"))
         assert _fingerprint(pdf)[1] == base["layout_sha256"], s.name
+
+
+@pytest.mark.e2e
+def test_demo_text_route_v2_passes_the_standard(tmp_path):
+    """the synthetic Russian sheet built by the text route under output standard 3 passes the v2 gate."""
+    from drawtrans.qa import standard as QS
+    demo = tmp_path / "demo"
+    shutil.copytree(ROOT / "demo", demo, ignore=shutil.ignore_patterns("work", "multilang"))
+    shutil.copytree(ROOT / "glossary", tmp_path / "glossary")
+    cfg = (demo / "project.toml").read_text(encoding="utf-8").replace("[project]\n", "[project]\noutput_standard = 3\n", 1)
+    (demo / "project.toml").write_text(cfg, encoding="utf-8")
+    r = subprocess.run([sys.executable, "-m", "drawtrans.render.text_build", "all", "--config", "project.toml",
+                        "--english", "keep"], cwd=demo, env=child_env(), capture_output=True, text=True,
+                       encoding="utf-8", errors="replace")
+    assert r.returncode == 0, r.stdout[-1500:] + r.stderr[-1500:]
+    res = QS.check_file(next((demo / "work" / "output").glob("*.placements.json")))
+    assert res["ok"], res["violations"][:5]
+    items = __import__("json").loads(next((demo / "work" / "output").glob("*.placements.json")).read_text(encoding="utf-8"))["items"]
+    v3 = [x for x in items if x.get("std") == 3 and x.get("role") == "label"]
+    assert v3 and all(x["fs"] * x["ps"] >= 6.0 - 1e-6 for x in v3)

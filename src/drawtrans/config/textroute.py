@@ -33,6 +33,7 @@ class Config:
     extract: Path = Path("extract")
     font: str | None = None              # Chinese font file; None = auto-detect
     notes_pages: str = ""                # pages with long numbered notes, e.g. "7,8"
+    output_standard: int = 1             # 3 = layout v2 (docs/output_standard.md §8); 1 = legacy placer
     tb_anchors: list[str] = field(default_factory=lambda: list(DEFAULT_TB_ANCHORS))
     left_stamp: float = 75.0             # width (pt) of the left margin stamp strip
     names: list[str] = field(default_factory=list)       # never translated (signatures)
@@ -77,6 +78,7 @@ def load(path: str | Path | None = None) -> Config:
     c.extract = p.get("extract_dir", c.extract)
     c.font = p.get("font")
     c.notes_pages = str(p.get("notes_pages", ""))
+    c.output_standard = int(p.get("output_standard", d.get("scan", {}).get("output_standard", 1)) or 1)
     c.tb_anchors = tb.get("anchors", c.tb_anchors if i18n.pair().src.code == "ru" else list(i18n.pair().src.tb_anchors))
     c.left_stamp = float(tb.get("left_stamp_width", c.left_stamp))
     c.names = keep.get("names", [])
