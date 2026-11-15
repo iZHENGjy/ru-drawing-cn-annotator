@@ -54,11 +54,35 @@ Chinese pairs). A page without a title block gets no such line.
 
 ## 5. Regression
 
-The approved drawing output (baselines `approved_kg1.json`, `approved_kg1i.json`, kept outside
+The approved drawing output (baselines `approved_<set>.json` of the approved volumes, kept outside
 this repository) must not change: `layout_sha256` stays identical. New behaviour that would change
 those pages is switched on per project: `[scan] output_standard = 2` (scan route) and
 `[project] notes_pages` (text route, running-text pages). Default `output_standard = 1` reproduces the
-approved layout byte for byte.
+approved layout byte for byte. `rudraw init` writes `output_standard = 2` for new scan projects.
+
+## 6. Checked by code
+
+`scripts/qa/standard.py` checks the rules above on the placement record every build writes next to
+the output PDF (`*.placements.json`; the PDF itself is not touched). A violation makes the run
+**not deliverable** (`rudraw run` gate `output_standard`, exit code 2):
+
+| rule | check |
+|---|---|
+| `above` | a label set above its source text (§3) |
+| `split_paragraph` | a column paragraph ends mid-sentence and the next one continues it (§2) |
+| `title_block_cell` | a title-block field translated inside its cell (§4) |
+| `row_number` | a row of a numbered table in the column without its row number (§2) |
+| `font_floor` | column text below 6.4 pt, labels below 4.0 pt (§2) |
+
+Only placements made under the standard count (`output_standard = 2`, extension columns); pages of
+the approved legacy layout are listed as advisory notes.
+
+## 7. Other languages
+
+The rules are the same for every language pair (`[project] source_lang / target_lang`): extension
+column, translation directly below the source, one title-block legend line. Only the font (CJK for a
+Chinese target, Latin/Cyrillic otherwise), the line breaking (jieba words for Chinese, spaces otherwise)
+and the legend words (`图签译文：` / `Title block:` …) follow the target language.
 
 ## Where it is implemented
 

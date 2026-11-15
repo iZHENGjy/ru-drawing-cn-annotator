@@ -166,7 +166,7 @@ def run_job(job: Job, frm=None, only=None, until=None, force=False, pages=None, 
     if not rc and ran_report:
         import json
         s = json.loads((job.job_dir / "run_summary.json").read_text(encoding="utf-8"))
-        bad = [k for k, v in s["gates"].items() if v["ok"] is False and k != "qa_flags"]
+        bad = [k for k, v in s["gates"].items() if v["ok"] is False and k not in ("qa_flags", "consistency")]
         out(f"delivery gates: {'READY' if s['delivery_ready'] else 'NOT READY'}"
             + (f"  failing: {', '.join(bad)}" if bad else "") + f"  (see {job.job_dir / 'run_summary.json'})")
         rc = 2 if bad else 0

@@ -14,6 +14,16 @@ description: 把俄文工程图纸转成中文对照版——蓝色中文叠加�
 - 图签和侧栏:归入一行「图签译文」。
 - 认可图纸的 `layout_sha256` 不得改变。
 
+## 多语言
+`[project] source_lang / target_lang`(ISO 代码,默认 `ru`→`zh`,与旧版完全一致)。`rudraw init ... --src en --tgt zh`。
+支持 ru/en/kk/uk/de/fr/zh 互译(常用:ru→zh、en→zh、kk→zh、zh→ru、zh→en、ru→en);术语库在 `glossary/<源>-<目标>/`。
+版式规则不随语言变,只换字体和断行。详见 docs/pipeline.md「Languages」。
+
+## 防返工:先出样页
+整册 `run` 先按页面类型(正文/表格/图纸/扫描信函)各出一页 PNG(`work/job/samples/`),退出码 3;
+看过再 `run --approve-samples` 跑整册(`--no-samples` 跳过)。版式标准由程序关卡 `output_standard` 检查,
+违规即不可交付;同一原文多种译法列在 `work/review/consistency.tsv`。
+
 ## 0. 普查,选路线
 - `python scripts/01_extract.py`(在项目文件夹里,带 project.toml)。**有文字层** → 主流程(第 1 节);
   **扫描件 / SHX 线条字** → 扫描件流程(第 2 节);DWG → DXF 后走 `scripts/cad/`(README)。

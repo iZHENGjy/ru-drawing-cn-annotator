@@ -48,6 +48,8 @@ MARK = re.compile(r"(^|[^а-яa-z])[бвпркмфс][мm](?=\s?⟨)")      # К
 ABBR = re.compile(r"(^|[^а-я])(п\.м|м\.п|(см|ед|кг|отм|поз|прим|зам|изм|разд|табл|ч|л|т)\.)")   # п.м = 延米
 CJK = i18n.TGT_CHAR                      # target script (Chinese for ru-zh)
 PH = T.PH
+# «Лист», «Лист / Sheet», «Лист ⟨1⟩» — a sheet (page) field of a header or title block, never steel plate
+SHEET_HDR = re.compile(r"\W*[ЛL]ист\.?\W*(/\W*Sheet\.?\W*)?", re.I)
 SPEC = re.compile(r"гост|gost|ту\b|сп\b|снип|ост\b|din\b|en\b|iso\b|a\d{3}c?|а\d{3}с?|с\d{3}|l=|мм|mm|кг|kg|шт|pcs|sp\b"
                   r"|[a-zа-я]{1,2}\d", re.I)
 
@@ -77,8 +79,10 @@ def _gloss_key(k: str) -> str:
 
 
 class TMStore:
-    def __init__(self, cfg: dict | None = None, root: Path | None = None, names=(), skip_regex: str = ""):
+    def __init__(self, cfg: dict | None = None, root: Path | None = None, names=(), skip_regex: str = "",
+                 sheet_sense: bool = False):
         cfg = cfg or {}
+        self.sheet_sense = sheet_sense             # [scan] quality_rules: «Лист» in headers = 页
         self.root = Path(root or Path.cwd())
         self.path = _abs(self.root, cfg.get("project", "tm/project.json"))
         gl = [legacy(_abs(self.root, g)) for g in cfg.get("glossaries", [])]
@@ -175,6 +179,12 @@ class TMStore:
                    src=e.get("src", layer), conf=e.get("conf", "high"), fuzzy=fuzzy, key=e["key"], bare=bare)
 
     def lookup(self, key: str, ctx: str = "body", fuzzy: bool = True) -> Hit | None:
+        h = self._lookup(key, ctx, fuzzy)
+        if h is not None and self.sheet_sense and SHEET_HDR.fullmatch(key or "") and "钢板" in (h.zh or ""):
+            h = Hit(**{**h.__dict__, "zh": "页", "conf": "low"})   # «Лист» without dimensions: the sheet, not a plate
+        return h
+
+    def _lookup(self, key: str, ctx: str = "body", fuzzy: bool = True) -> Hit | None:
         f = S.fold(key)
         for layer in ("project", "shared", "glossary"):
             L = self.layers[layer]

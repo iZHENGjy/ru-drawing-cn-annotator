@@ -427,6 +427,12 @@ def collect(ctx, pages=None, fuzzy: bool = True, write: bool = True, skip_notes:
             for q in pars:
                 members |= set(q["ids"])
                 items.append(("para", "P" + "-".join(map(str, q["ids"])), q["box"], q["ru"], True))
+        if getattr(ctx.cfg, "quality_rules", False):            # multi-line drawing labels translated whole
+            for q in label_groups([dict(id=d["id"], box=d["box"], text=d["text"]) for d in P.lines], skip=members):
+                if any(ov(q["box"], nb) >= 0.6 for nb in nboxes):
+                    continue
+                members |= set(q["ids"])
+                items.append(("join", "J" + "-".join(map(str, q["ids"])), q["box"], q["ru"], True))
         for src, iid, box, text, need in items:
             if src == "tess" and iid in members:
                 need = False
@@ -494,3 +500,44 @@ def collect(ctx, pages=None, fuzzy: bool = True, write: bool = True, skip_notes:
     if write:
         S.save(ctx.w / "seg" / "segments.json")
     return S
+
+
+# ---------------------------------------------------------------- multi-line labels ([scan] join_labels)
+_END = i18n.rx(r"[.:;!?)»\"]$")
+_LOWER_START = i18n.rx(r"^[«(\"]?[а-яё]")
+
+
+def label_groups(lines, skip=()):
+    """Drawing labels written over 2-3 lines (dense rebar sheets): a line that does not end a sentence and
+    the line right below it, left-aligned, same height, starting lower-case (or after a hyphen).
+    lines: [{id, box, text}] -> [{ids, box, ru}].  Translated as one phrase, placed under the group."""
+    ls = sorted((l for l in lines if l["id"] not in skip and cyr_count(l["text"]) >= 2 and len(l["text"]) <= 60),
+                key=lambda l: (l["box"][1], l["box"][0]))
+    used, out = set(), []
+    for a in ls:
+        if a["id"] in used:
+            continue
+        grp = [a]
+        while len(grp) < 3:
+            last = grp[-1]; lb = last["box"]; h = lb[3] - lb[1]
+            t = last["text"].strip()
+            if _END.search(t) and not t.endswith("-"):
+                break
+            nxt = None
+            for b in ls:
+                bb = b["box"]; hb = bb[3] - bb[1]
+                if b["id"] in used or b is last or any(b is g for g in grp):
+                    continue
+                if 0 <= bb[1] - lb[3] < 0.8 * h and abs(bb[0] - lb[0]) < 1.5 * h and 0.7 < hb / max(h, 1e-9) < 1.4:
+                    if t.endswith("-") or _LOWER_START.search(b["text"].strip()):
+                        nxt = b
+                    break
+            if nxt is None:
+                break
+            grp.append(nxt)
+        if len(grp) >= 2:
+            used |= {g["id"] for g in grp}
+            box = [min(g["box"][0] for g in grp), min(g["box"][1] for g in grp),
+                   max(g["box"][2] for g in grp), max(g["box"][3] for g in grp)]
+            out.append(dict(ids=[g["id"] for g in grp], box=box, ru=T.join_lines("\n".join(g["text"] for g in grp))))
+    return out

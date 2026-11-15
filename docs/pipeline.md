@@ -22,7 +22,53 @@ Use the path of this repository for `scripts/rudraw.py`. Every command takes `--
 set the title and the short output tag; `--force` overwrites an existing `project.toml`.
 
 Exit codes of `run`: `0` all stages ok and all gates passed, `1` a stage failed, `2` stages ran but a
-delivery gate failed (see "Delivery gates").
+delivery gate failed (see "Delivery gates"), `3` the sample pages are ready for a look (see "Samples first").
+
+## Languages
+
+The language pair is part of the project:
+
+```toml
+[project]
+source_lang = "ru"      # ru en kk uk de fr zh (ISO 639-1)
+target_lang = "zh"      # zh en ru ...
+```
+
+`rudraw init <folder> --pdf X.pdf --src en --tgt zh` writes it. The default `ru -> zh` behaves exactly as
+before (same patterns, prompts, fonts, glossaries; the approved layout is byte-identical). Per pair
+(`scripts/i18n.py`):
+
+| what | follows |
+|---|---|
+| OCR | Tesseract `-l` (`rus+eng`, `eng`, `kaz+rus+eng`, `chi_sim+eng` …; `[scan] lang` overrides), RapidOCR recognition model (`ESLAV`, `EN`, `CYRILLIC`, `LATIN`, `CH`) |
+| "source text" detection | every pattern written for Cyrillic (`[А-Яа-яЁё]` …) is rewritten for the source alphabet: coverage audit, dedupe, OCR lines |
+| look-alike repair | Latin <-> Cyrillic look-alikes (Tpy6a -> Труба) only for Cyrillic sources |
+| font, line breaking | CJK font + jieba words for a Chinese target; Arial/DejaVu + breaks at spaces otherwise |
+| prompts | `scripts/llm/tasks/<task>.md` for ru-zh (unchanged), `<task>.<src>-<tgt>.md` if present, else `<task>.generic.md` with the language names filled in |
+| glossaries | `glossary/<src>-<tgt>/` (`ru-zh` holds the former `glossary/*.json`; old paths still work) |
+| title block | ГОСТ 21.101 field names for ru/kk; ISO 7200 words for en; GB/T words for zh |
+| guards | placeholders `⟨n⟩` are language-independent; standard designations per source (ГОСТ/СП…, BS/EN/ISO/ASTM…, GB/JGJ…); member marks: ГОСТ marks for ru, `[guard] mark_regex` for any language |
+
+```toml
+[guard]
+mark_regex = '([A-Z]{1,2})-?(\d+(?:\.\d+)?)'   # member marks of this project (two groups: letters, number)
+std_regex = "BS EN|ISO|ASTM"                      # standard designations (non-ru sources)
+```
+
+Synthetic demos: `demo/multilang/en_job` (English scan -> Chinese) and `zh_job` (Chinese text layer -> English).
+
+## Samples first
+
+A full `run` of a volume with more than 6 pages first builds **one page of each kind** (running text,
+table, drawing, scanned letter/prose; picked from a 50 dpi render, no OCR or LLM), writes
+`work/job/samples/pNN_<kind>.png` and stops with exit code 3. Look at the PNGs, then
+
+```bash
+python scripts/rudraw.py run --approve-samples      # the whole volume; the sample pages replay from the cache
+python scripts/rudraw.py run --no-samples           # skip the step (e.g. a re-run)
+```
+
+`--pages`, `--only`, `--from`, `--until` and `--dry-run` never stop for samples.
 
 ## project.toml
 
@@ -148,6 +194,36 @@ with `src = human` entries and every project that lists it picks them up. A shar
 and can live outside this repository. Only phrases found in no layer reach `translate`, so each
 further volume of a set is cheaper.
 
+## Speed
+
+Pages are independent, so the slow local steps run in parallel processes (24-core machine: 8 workers):
+RapidOCR (`RUDRAW_RAPID_WORKERS`, one process per page group), the page build (`RUDRAW_BUILD_WORKERS`),
+the coverage audit (`RUDRAW_AUDIT_WORKERS`) and QA (`RUDRAW_QA_WORKERS`). The build caches every page in
+`work/review/page_cache/` by a hash of exactly what it reads (map, fix, notes, OCR lines and words,
+RapidOCR boxes, config, engine code) and QA caches per output page in `work/job/qa_cache/`: a rebuild after
+an audit fix redoes only the changed pages. The second audit loop asks only about candidates that are new
+since the first answer.
+
+## Cost options
+
+`[job] optimize = true` (written by `rudraw init`; absent in older projects, whose cached answers keep
+replaying unchanged):
+
+- a page whose notes block reads like an earlier sheet's (≥ 95 %) reuses that sheet's notes; only its
+  title block is read, by `[job] cheap_model` (default `haiku`);
+- title-block-only sheets go to the cheap model;
+- a page with a real text layer (it holds ≥ 80 % of what OCR reads) sends its exact text and no images;
+- fixed texts already in the TM (title-block fields, table headers) are listed as known in the packet;
+- a label that breaks a code rule is dropped instead of re-asking the whole sheet (the audit re-checks it).
+
+Always on: mechanical fixes of an answer (a format written «А3х3», decimal commas) before validation
+instead of a paid retry, and a prompt-cache warm-up (the first call of a stage runs alone, the parallel
+calls after it read the cached system prompt).
+
+`[scan] quality_rules = true` (also written by `init`): a label written over 2–3 OCR lines is translated as
+one phrase and placed under the group; «Лист» / «Лист / Sheet» without dimensions is the sheet field (页),
+never 钢板 (the validator rejects that answer too).
+
 ## Cost control
 
 - Every call is a row in `work/job/ledger.jsonl` (task, model, tokens, exact cost, cached flag).
@@ -189,8 +265,10 @@ They are written to `work/job/run_summary.json`; `run` exits `2` if one fails.
 | `audit_remaining` | `remaining 0`, with `work/rapid` present |
 | `mark_gate` | `50_check` exit 0 (every member mark exists in the sheet titles) |
 | `qa_flags` | advisory only: flagged pages go to the visual review |
+| `output_standard` | the rules of [output_standard.md](output_standard.md) checked by code (`qa/standard.py`): no label above its source, whole paragraphs, title block in one legend line, numbered table rows, font floor |
+| `consistency` | advisory: source texts with several translations in the volume (`work/review/consistency.tsv`, `qa/consistency.py`) |
 
-The text route has one gate, `missing_tm_keys` = 0. When a gate fails: `status`, read
+The text route has the gates `missing_tm_keys` = 0 and `output_standard`. When a gate fails: `status`, read
 `work/job/logs/<stage>.log`, fix the cause, re-run that stage (`run --from <stage>`).
 
 ## Regression and QA commands

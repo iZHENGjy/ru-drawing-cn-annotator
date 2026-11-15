@@ -52,6 +52,9 @@ def gates(job) -> dict:
             "qa_flags": g(q.get("qa_flags"), None if q.get("qa_flags") is None else q["qa_flags"] == 0,
                           "advisory: flagged pages go to visual review"),
             "output_standard": standard_gate(job),
+            "consistency": g(q.get("m_inconsistent_terms"), None if q.get("m_inconsistent_terms") is None
+                             else q["m_inconsistent_terms"] == 0,
+                             "advisory: source texts with several translations (work/review/consistency.tsv)"),
         }
     b = m("build")
     mk = b.get("missing_tm_keys")
@@ -63,7 +66,7 @@ def write(job) -> dict:
     job.job_dir.mkdir(parents=True, exist_ok=True)
     rep = cost.write_report(job.job_dir, job.n_pages)
     gs = gates(job)
-    advisory = {"qa_flags"}
+    advisory = {"qa_flags", "consistency"}
     ready = all(v["ok"] is True for k, v in gs.items() if k not in advisory and not (k == "output_standard" and v["ok"] is None))
     stages = {}
     for st in job.stages:

@@ -341,6 +341,21 @@ def map_page(ctx, pg: int, tm, notes_res: dict | None = None, known: set | None 
                 meta[str(i)] = dict(conf="high", src="paragraph", why=f"paragraph {q['ids'][0]}")
             paras.append(dict(ids=q["ids"], box=[round(v, 4) for v in q["box"]], ru=q["ru"], zh=zh, kind=q["kind"],
                               low=bool(hit.fuzzy or hit.conf == "low" or dropped)))
+    if getattr(ctx.cfg, "quality_rules", False):        # multi-line labels: one phrase, placed under the group
+        taken = {int(i) for q in paras for i in q["ids"]} | set(notes_lines)
+        for q in S.label_groups([dict(id=d["id"], box=d["box"], text=d["text"]) for d in P.lines], skip=taken):
+            txt, ok = S.reconcile(q["ru"], S.rapid_over(P, q["box"]))
+            key, nums, _, _ = S.make_key(txt)
+            hit = tm.lookup(key, "tb" if in_tb(q["box"], tb) else "body")
+            zh, dropped = render(hit, nums, ok, hit.key if hit.fuzzy else key) if hit else ("", 0)
+            if not zh or not CJK.search(zh) or COUNT_ZH.match(zh):
+                continue                                  # no whole translation: the lines keep their own
+            for i in q["ids"]:
+                lines[str(i)] = ""
+                meta[str(i)] = dict(conf="high", src="joined", why=f"label lines {q['ids']} joined")
+            extra.append(dict(box=[round(v, 4) for v in q["box"]], zh=zh, ru=q["ru"], src="joined"))
+            xmeta.append(dict(conf="low" if (hit.fuzzy or hit.conf == "low" or dropped) else "high",
+                              src=f"{hit.layer}:{hit.src}", key=key, why="joined label"))
     m = {"lines": lines, "extra": extra, "appendix": bool(used)}
     if paras:
         m["paras"] = paras

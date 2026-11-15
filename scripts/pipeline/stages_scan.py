@@ -85,7 +85,7 @@ def _tm_store(sc):
     tms = lazy("scan.tmstore", sc.stage.name)
     scan = sc.job.ctx.cfg
     return tms.TMStore(sc.cfg.tm_cfg(), root=sc.cfg.root, names=list(scan.names or []),
-                       skip_regex=scan.skip_regex or "")
+                       skip_regex=scan.skip_regex or "", sheet_sense=bool(getattr(scan, "quality_rules", False)))
 
 
 def _segments(sc):
@@ -378,6 +378,10 @@ def run_qa(sc: StageCtx):
     m.update({"occ_" + k: v for k, v in QO.summary(rows, flagged).items()})
     m["occ_tiles"] = len(tiles)
     _jf(sc.job, "qa_tiles.json").write_text(json.dumps(tiles, ensure_ascii=False, indent=1), encoding="utf-8")
+    from qa import consistency as QC                # the same source text translated in several ways
+    crows = QC.report(QC.collect(sc.job.ctx))
+    QC.write_tsv(crows, sc.job.ctx.w / "review" / "consistency.tsv")
+    m["inconsistent_terms"] = len(crows)
     _jf(sc.job, "metrics.json").write_text(json.dumps(m, ensure_ascii=False, indent=1), encoding="utf-8")
     flag_pages = sorted({t["src_page"] for t in tiles})
     return {"qa_flags": len(flagged), "flag_pages": flag_pages, "tiles": len(tiles),

@@ -154,6 +154,16 @@ def ids_complete(got: list, want: list, label: str = "id") -> list[str]:
 
 
 # --------------------------------------------------------------------------- tasks
+SHEET_HDR = re.compile(r"\W*[ЛL]ист\.?\W*(/\W*Sheet\.?\W*)?", re.I)
+
+
+def sheet_sense(src: str, zh: str) -> str | None:
+    """«Лист» / «Лист / Sheet» (a header or title-block field, no dimensions) is the sheet: 页 / 张, not 钢板."""
+    if i18n.pair().src.code == "ru" and "钢板" in (zh or "") and SHEET_HDR.fullmatch(src or ""):
+        return "«Лист» without dimensions is the sheet / page field of a header or title block: 页 (or 张), not 钢板"
+    return None
+
+
 def validate_phrase_translate(payload: dict, out: dict, schema: dict) -> list[str]:
     errs = shape(out, schema)
     if errs:
@@ -175,6 +185,9 @@ def validate_phrase_translate(payload: dict, out: dict, schema: dict) -> list[st
             errs.append(p + e + f" — zh must carry exactly the placeholders of key {sorted(PH.findall(key))}")
         if COUNT_ONLY.fullmatch(zh):
             errs.append(p + "count labels (根/件/间距) are written by the engine: use skip")
+        e = sheet_sense(key, zh)
+        if e:
+            errs.append(p + e)
         for m in CYR_RUN.finditer(zh):
             w = m.group(0)
             if norm(w) not in norm(key):
